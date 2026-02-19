@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Recipe, MealPlanDay, ShoppingListItem, AppTab, UserSettings, Ingredient, FoodPortion } from './types';
 import { ICONS, CATEGORIES, DIETARY_OPTIONS } from './constants';
@@ -310,7 +309,7 @@ export default function App() {
 
         alert("Données Excel importées !");
       } catch (err) {
-        alert("Erreur lors de la lecture du fichier Excel.");
+        alert("Erreur lors de l'importation.");
       }
     };
     reader.readAsBinaryString(file);
@@ -760,7 +759,6 @@ const RecipeDetail: React.FC<{
           </div>
           <div className="space-y-6 bg-gray-50 p-6 rounded-[32px]">
             <div className="flex justify-between items-center">
-              {/* FIXED: Added missing opening tag for h3 on the next line */}
               <h3 className="text-xl font-black text-gray-800">Ingrédients</h3>
               <span className="text-xs font-black text-purple-400">Total : {recipe.prepTime + recipe.cookTime} min</span>
             </div>
@@ -1380,7 +1378,8 @@ const RecurringView: React.FC<{
                       key={item.id} 
                       draggable="true"
                       onDragStart={(e) => onDragStart(e, item.id, group.id)}
-                      className={`py-4 flex gap-4 items-center cursor-grab active:cursor-grabbing hover:bg-purple-50/50 px-2 rounded-xl transition-all ${item.checked ? 'opacity-60' : ''}`}
+                      style={{ WebkitTouchCallout: 'none', touchAction: 'none' }}
+                      className={`py-4 flex gap-4 items-center cursor-grab active:cursor-grabbing hover:bg-purple-50/50 px-2 rounded-xl transition-all select-none ${item.checked ? 'opacity-60' : ''}`}
                     >
                        <div onClick={() => toggleItem(group.id, item.id)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${item.checked ? 'bg-green-500 border-green-500' : 'border-gray-100 bg-white'}`}>
                          {item.checked && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
