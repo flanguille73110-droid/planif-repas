@@ -35,6 +35,11 @@ const EXT_ICONS = {
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
     </svg>
+  ),
+  Grip: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
   )
 };
 
@@ -372,8 +377,11 @@ export default function App() {
             foodPortions={settings.foodPortions} 
             onAddFoodToSettings={handleQuickAddFoodToSettings}
             onSendToShopping={(items) => {
-              mergeToShoppingList(items.map(i => ({ ...i, checked: false, id: Math.random().toString(36).substr(2, 9) })));
-              setActiveTab('shopping');
+              const itemsToTransfer = items.filter(i => !i.checked);
+              if (itemsToTransfer.length > 0) {
+                mergeToShoppingList(itemsToTransfer.map(i => ({ ...i, checked: false, id: Math.random().toString(36).substr(2, 9) })));
+                setActiveTab('shopping');
+              }
             }}
           />
         )}
@@ -752,6 +760,7 @@ const RecipeDetail: React.FC<{
           </div>
           <div className="space-y-6 bg-gray-50 p-6 rounded-[32px]">
             <div className="flex justify-between items-center">
+              {/* FIXED: Added missing opening tag for h3 on the next line */}
               <h3 className="text-xl font-black text-gray-800">Ingrédients</h3>
               <span className="text-xs font-black text-purple-400">Total : {recipe.prepTime + recipe.cookTime} min</span>
             </div>
@@ -1095,6 +1104,7 @@ const RecurringView: React.FC<{
   const [newItemUnit, setNewItemUnit] = useState('unité');
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
 
   const addTempItem = () => {
     if (!newItemName.trim()) return;
@@ -1171,6 +1181,55 @@ const RecurringView: React.FC<{
       }
       return g;
     }));
+  };
+
+  // Drag & Drop handlers
+  const onDragStart = (e: React.DragEvent, itemId: string, sourceGroupId: string) => {
+    e.dataTransfer.setData("application/json", JSON.stringify({ itemId, sourceGroupId }));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const onDragOver = (e: React.DragEvent, groupId: string) => {
+    e.preventDefault();
+    setDragOverGroupId(groupId);
+  };
+
+  const onDragLeave = () => {
+    setDragOverGroupId(null);
+  };
+
+  const onDrop = (e: React.DragEvent, targetGroupId: string) => {
+    e.preventDefault();
+    setDragOverGroupId(null);
+    try {
+      const dataStr = e.dataTransfer.getData("application/json");
+      if (!dataStr) return;
+      const { itemId, sourceGroupId } = JSON.parse(dataStr);
+      
+      if (sourceGroupId === targetGroupId) return;
+
+      setGroups(prev => {
+        const sourceGroup = prev.find(g => g.id === sourceGroupId);
+        if (!sourceGroup) return prev;
+        const itemToMove = sourceGroup.items.find(i => i.id === itemId);
+        if (!itemToMove) return prev;
+
+        return prev.map(g => {
+          if (g.id === sourceGroupId) {
+            return { ...g, items: g.items.filter(i => i.id !== itemId) };
+          }
+          if (g.id === targetGroupId) {
+            return { 
+              ...g, 
+              items: [...g.items, itemToMove].sort((a, b) => a.name.localeCompare(b.name)) 
+            };
+          }
+          return g;
+        });
+      });
+    } catch (err) {
+      console.error("Drop error", err);
+    }
   };
 
   return (
@@ -1276,7 +1335,13 @@ const RecurringView: React.FC<{
           </div>
         ) : (
           groups.map(group => (
-            <div key={group.id} className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden flex flex-col animate-slideUp">
+            <div 
+              key={group.id} 
+              onDragOver={(e) => onDragOver(e, group.id)}
+              onDragLeave={onDragLeave}
+              onDrop={(e) => onDrop(e, group.id)}
+              className={`bg-white rounded-[40px] border-2 transition-all shadow-sm overflow-hidden flex flex-col animate-slideUp ${dragOverGroupId === group.id ? 'border-purple-400 scale-[1.02]' : 'border-gray-100'}`}
+            >
                <div className="p-6 bg-purple-50/30 flex justify-between items-center border-b border-gray-50">
                   <div className="flex items-center gap-3">
                     <h3 className="text-xl font-black text-gray-800 uppercase tracking-tight">{group.name}</h3>
@@ -1285,6 +1350,13 @@ const RecurringView: React.FC<{
                     </span>
                   </div>
                   <div className="flex gap-2">
+                    <button 
+                      onClick={() => onSendToShopping(group.items)}
+                      className="text-purple-600 hover:bg-purple-100 p-2 rounded-xl transition-all"
+                      title="Envoyer aux courses"
+                    >
+                      <EXT_ICONS.Cart />
+                    </button>
                     <button 
                       onClick={() => handleEditGroup(group)} 
                       className="text-purple-600 hover:bg-purple-100 p-2 rounded-xl transition-all"
@@ -1304,7 +1376,12 @@ const RecurringView: React.FC<{
                <div className="p-6 divide-y divide-gray-50">
                   {/* Affichage trié par ordre alphabétique */}
                   {group.items.slice().sort((a, b) => a.name.localeCompare(b.name)).map(item => (
-                    <div key={item.id} className="py-4 flex gap-4 items-center">
+                    <div 
+                      key={item.id} 
+                      draggable="true"
+                      onDragStart={(e) => onDragStart(e, item.id, group.id)}
+                      className={`py-4 flex gap-4 items-center cursor-grab active:cursor-grabbing hover:bg-purple-50/50 px-2 rounded-xl transition-all ${item.checked ? 'opacity-60' : ''}`}
+                    >
                        <div onClick={() => toggleItem(group.id, item.id)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${item.checked ? 'bg-green-500 border-green-500' : 'border-gray-100 bg-white'}`}>
                          {item.checked && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
                        </div>
@@ -1785,7 +1862,6 @@ const ShoppingView: React.FC<{
                   <input 
                     type="number"
                     className="w-12 p-1 text-center font-black text-xs bg-purple-50 text-purple-600 rounded-lg outline-none focus:ring-1 focus:ring-purple-300 transition-all border border-transparent hover:border-purple-200"
-                    /* Corrected line 1782: replace undefined 'item' with map variable 'i' */
                     value={i.amount}
                     onChange={(e) => updateAmount(i.id, Number(e.target.value))}
                     onFocus={(e) => e.target.select()}
@@ -2040,4 +2116,4 @@ const Settings: React.FC<{
       </div>
     </div>
   );
-};
+}
