@@ -48,6 +48,16 @@ interface PantryGroup {
   items: ShoppingListItem[];
 }
 
+// --- Helper Functions ---
+const formatTotalTime = (minutes: number) => {
+  if (minutes > 59) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')} h ${mins.toString().padStart(2, '0')} min`;
+  }
+  return `${minutes} min`;
+};
+
 // --- Main App ---
 
 export default function App() {
@@ -677,7 +687,7 @@ function RecipeBook({ recipes, addRecipe, onAddToShopping, foodPortions, onAddFo
               <div className="p-6">
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">{r.category}</span>
-                  <span className="text-[10px] font-black text-gray-400 flex items-center gap-1">⏲️ {r.prepTime + r.cookTime} min</span>
+                  <span className="text-[10px] font-black text-gray-400 flex items-center gap-1">⏲️ {formatTotalTime(r.prepTime + r.cookTime)}</span>
                 </div>
                 <h3 className="text-xl font-black text-gray-800 mt-1 line-clamp-1">{r.title}</h3>
               </div>
@@ -769,7 +779,7 @@ function RecipeDetail({ recipe, onClose, onAddToShopping, updateMealPlan, setSen
           <div className="space-y-6 bg-gray-50 p-6 rounded-[32px]">
             <div className="flex justify-between items-center">
               <h3 className="text-xl font-black text-gray-800">Ingrédients</h3>
-              <span className="text-xs font-black text-purple-400">Total : {recipe.prepTime + recipe.cookTime} min</span>
+              <span className="text-xs font-black text-purple-400">Total : {formatTotalTime(recipe.prepTime + recipe.cookTime)}</span>
             </div>
             <ul className="space-y-3">
               {(recipe.ingredients || []).map((ing, i) => (
@@ -879,9 +889,7 @@ function RecipeForm({ onSave, onCancel, foodPortions, onAddFoodToSettings, initi
             <div className="space-y-2">
               <label className="text-[10px] font-black text-green-400 uppercase tracking-widest ml-2">⌛ Temps Total</label>
               <div className="w-full p-4 border border-green-50 rounded-2xl bg-green-50 font-black text-green-600 flex items-center justify-center">
-                {totalTime > 59 
-                  ? `${Math.floor(totalTime / 60).toString().padStart(2, '0')} h ${ (totalTime % 60).toString().padStart(2, '0')} min` 
-                  : `${totalTime} min`}
+                {formatTotalTime(totalTime)}
               </div>
             </div>
             <div className="space-y-2">
