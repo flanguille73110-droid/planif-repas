@@ -878,7 +878,11 @@ function RecipeForm({ onSave, onCancel, foodPortions, onAddFoodToSettings, initi
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-green-400 uppercase tracking-widest ml-2">⌛ Temps Total</label>
-              <div className="w-full p-4 border border-green-50 rounded-2xl bg-green-50 font-black text-green-600 flex items-center justify-center">{totalTime} min</div>
+              <div className="w-full p-4 border border-green-50 rounded-2xl bg-green-50 font-black text-green-600 flex items-center justify-center">
+                {totalTime > 59 
+                  ? `${Math.floor(totalTime / 60).toString().padStart(2, '0')} h ${ (totalTime % 60).toString().padStart(2, '0')} min` 
+                  : `${totalTime} min`}
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">👥 Pour (pers.)</label>
