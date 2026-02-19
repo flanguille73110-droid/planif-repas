@@ -120,6 +120,31 @@ export default function App() {
     localStorage.setItem('culina_sent_meals', JSON.stringify(Array.from(sentMeals)));
   }, [recipes, mealPlan, settings, shoppingList, pantryGroups, reserveItems, sentMeals]);
 
+  // Helper function to sync food names to settings
+  const syncFoodsToSettings = useCallback((items: { name: string; unit?: string }[]) => {
+    setSettings(prev => {
+      const currentPortions = prev.foodPortions || [];
+      const newPortions = [...currentPortions];
+      let changed = false;
+
+      items.forEach(item => {
+        if (!item.name || !item.name.trim()) return;
+        const exists = newPortions.some(p => p.name.toLowerCase() === item.name.toLowerCase().trim());
+        if (!exists) {
+          newPortions.push({
+            id: Math.random().toString(36).substr(2, 9),
+            name: item.name.trim(),
+            amount: 1,
+            unit: item.unit || 'unité'
+          });
+          changed = true;
+        }
+      });
+
+      return changed ? { ...prev, foodPortions: newPortions } : prev;
+    });
+  }, []);
+
   const addRecipe = (r: Recipe) => setRecipes(prev => {
     const index = prev.findIndex(item => item.id === r.id);
     if (index > -1) {
@@ -161,18 +186,7 @@ export default function App() {
   }, []);
 
   const handleQuickAddFoodToSettings = (name: string, unit: string = 'g') => {
-    setSettings(prev => {
-      const portions = prev.foodPortions || [];
-      const exists = portions.some(p => p.name.toLowerCase() === name.toLowerCase().trim());
-      if (exists) return prev;
-      const newPortion: FoodPortion = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: name.trim(),
-        amount: 1,
-        unit: unit
-      };
-      return { ...prev, foodPortions: [...portions, newPortion] };
-    });
+    syncFoodsToSettings([{ name, unit }]);
   };
 
   const exportToJSON = () => {
@@ -198,6 +212,14 @@ export default function App() {
         if (data.shoppingList) setShoppingList(data.shoppingList);
         if (data.pantryGroups) setPantryGroups(data.pantryGroups);
         if (data.reserveItems) setReserveItems(data.reserveItems);
+        
+        // Sync imported items to settings
+        const itemsToSync: { name: string; unit?: string }[] = [];
+        if (data.pantryGroups) data.pantryGroups.forEach((g: PantryGroup) => g.items.forEach(i => itemsToSync.push(i)));
+        if (data.reserveItems) data.reserveItems.forEach((i: ShoppingListItem) => itemsToSync.push(i));
+        if (data.recipes) data.recipes.forEach((r: Recipe) => r.ingredients.forEach(i => itemsToSync.push(i)));
+        syncFoodsToSettings(itemsToSync);
+
         alert("Données importées avec succès !");
       } catch (err) { alert("Erreur lors de l'importation."); }
     };
@@ -247,6 +269,7 @@ export default function App() {
       try {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
+        const itemsToSync: { name: string; unit?: string }[] = [];
         
         // Process Récurrents
         if (wb.SheetNames.includes("Récurrents")) {
@@ -261,6 +284,9 @@ export default function App() {
               const amount = Number(row.Quantité || row.quantité || row.QUANTITE || 1);
               const unit = (row.Unité || row.unité || row.UNITE || "unité").toString();
               if (!itemName) return;
+              
+              itemsToSync.push({ name: itemName, unit: unit });
+
               let group = updatedGroups.find(g => g.name.toLowerCase() === listName.toLowerCase());
               if (!group) {
                 group = { id: Math.random().toString(36).substr(2, 9), name: listName, items: [] };
@@ -291,6 +317,8 @@ export default function App() {
               const unit = (row.Unité || row.unité || row.UNITE || "unité").toString();
               if (!itemName) return;
               
+              itemsToSync.push({ name: itemName, unit: unit });
+
               // Eviter les doublons lors de l'import
               const exists = updatedReserve.find(i => i.name.toLowerCase() === itemName.toLowerCase());
               if (!exists) {
@@ -307,6 +335,8 @@ export default function App() {
           });
         }
 
+        // Final sync of all imported names to settings
+        syncFoodsToSettings(itemsToSync);
         alert("Données Excel importées !");
       } catch (err) {
         alert("Erreur lors de l'importation.");
@@ -1069,7 +1099,12 @@ function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, o
              </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-purple-50/50 p-4 rounded-3xl">
-              <input list="pantry-suggestions" className="sm:col-span-5 p-4 rounded-2xl border border-gray-100 font-bold outline-none" placeholder="Article..." value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+              <div className="sm:col-span-5 relative">
+                <input list="pantry-suggestions" className="w-full p-4 rounded-2xl border border-gray-100 font-bold outline-none" placeholder="Rechercher article..." value={newItemName} onChange={e => setNewItemName(e.target.value)} onKeyPress={e => e.key === 'Enter' && addTempItem()} />
+                <datalist id="pantry-suggestions">
+                  {(foodPortions || []).map(fp => <option key={fp.id} value={fp.name} />)}
+                </datalist>
+              </div>
               <input type="number" className="sm:col-span-2 p-4 rounded-2xl border border-gray-100 font-black text-center text-purple-600" value={newItemAmount} onChange={e => setNewItemAmount(Number(e.target.value))} />
               <select className="sm:col-span-3 p-4 rounded-2xl border border-gray-100 font-bold" value={newItemUnit} onChange={e => setNewItemUnit(e.target.value)}>
                 <option value="unité">u.</option><option value="g">g</option><option value="kg">kg</option><option value="ml">ml</option><option value="L">L</option>
@@ -1246,6 +1281,9 @@ function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettin
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <input list="food-suggestions-shopping" className="flex-1 p-3.5 border border-gray-100 rounded-2xl bg-gray-50 font-bold outline-none" placeholder="Aliment..." value={newItemName} onChange={e => setNewItemName(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleAddItem()} />
+          <datalist id="food-suggestions-shopping">
+            {(foodPortions || []).map(fp => <option key={fp.id} value={fp.name} />)}
+          </datalist>
           <div className="flex gap-2">
             <input type="number" className="w-20 p-3.5 border border-gray-100 rounded-2xl font-black text-center text-purple-600" value={newItemAmount} onChange={e => setNewItemAmount(Number(e.target.value))} />
             <select className="w-24 p-3.5 border border-gray-100 rounded-2xl font-bold" value={newItemUnit} onChange={e => setNewItemUnit(e.target.value)}><option value="unité">u.</option><option value="g">g</option><option value="kg">kg</option><option value="ml">ml</option><option value="L">L</option></select>
