@@ -41,7 +41,7 @@ export interface ShoppingListItem {
   category?: string;
 }
 
-export type AppTab = 'recipes' | 'search' | 'planning' | 'recurring' | 'shopping' | 'settings';
+export type AppTab = 'recipes' | 'search' | 'planning' | 'recurring' | 'reserve' | 'shopping' | 'settings';
 
 export interface UserSettings {
   userName: string;
