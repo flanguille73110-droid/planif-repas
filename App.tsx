@@ -1112,7 +1112,19 @@ function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, o
               <button onClick={addTempItem} className="sm:col-span-2 bg-purple-600 text-white p-4 rounded-2xl font-black">Ajouter</button>
           </div>
           <div className="space-y-2 max-h-60 overflow-y-auto">
-            {tempItems.map(item => <div key={item.id} className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-100 animate-slideUp"><span className="font-bold text-gray-700">{item.name}</span><span className="font-black text-purple-600">{item.amount} {item.unit}</span></div>)}
+            {tempItems.map(item => (
+              <div key={item.id} className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-100 animate-slideUp">
+                <span className="font-bold text-gray-700">{item.name}</span>
+                <div className="flex items-center gap-4">
+                  <span className="font-black text-purple-600">{item.amount} {item.unit}</span>
+                  <button onClick={() => setTempItems(prev => prev.filter(i => i.id !== item.id))} className="p-1 text-red-400 hover:text-red-600 transition-colors" title="Supprimer">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
