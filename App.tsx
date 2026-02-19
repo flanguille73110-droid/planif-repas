@@ -1121,7 +1121,12 @@ function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, o
         {groups.map(group => (
           <div key={group.id} onDragOver={e => { e.preventDefault(); setDragOverGroupId(group.id); }} onDragLeave={() => setDragOverGroupId(null)} onDrop={e => onDrop(e, group.id)} className={`bg-white rounded-[40px] border-2 transition-all shadow-sm overflow-hidden flex flex-col animate-slideUp ${dragOverGroupId === group.id ? 'border-purple-400 scale-[1.02]' : 'border-gray-100'}`}>
              <div className="p-6 bg-purple-50/30 flex justify-between items-center border-b">
-                <h3 className="text-xl font-black text-gray-800 uppercase">{group.name}</h3>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-xl font-black text-gray-800 uppercase">{group.name}</h3>
+                  <span className="bg-purple-100 text-purple-600 text-[10px] font-black px-2 py-1 rounded-lg border border-purple-200 shadow-sm">
+                    {group.items.filter(i => !i.checked).length}/{group.items.length}
+                  </span>
+                </div>
                 <div className="flex gap-2">
                   <button onClick={() => onSendToShopping(group.items)} className="text-purple-600 p-2"><EXT_ICONS.Cart /></button>
                   <button onClick={() => { setEditingGroupId(group.id); setNewListName(group.name); setTempItems(group.items); setIsAddingList(true); }} className="text-purple-600 p-2"><EXT_ICONS.Edit /></button>
@@ -1249,6 +1254,9 @@ function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettin
   const [newItemName, setNewItemName] = useState('');
   const [newItemAmount, setNewItemAmount] = useState(1);
   const [newItemUnit, setNewItemUnit] = useState('unité');
+  
+  // State for summary checkboxes
+  const [checkedSummaryItems, setCheckedSummaryItems] = useState<Set<string>>(new Set());
 
   const consolidatedList = useMemo(() => {
     const map = new Map<string, ShoppingListItem>();
@@ -1265,6 +1273,13 @@ function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettin
     onAddFoodToSettings(newItemName.trim(), newItemUnit);
     setList(prev => [{ id: Math.random().toString(36).substr(2, 9), name: newItemName.trim(), amount: newItemAmount, unit: newItemUnit, checked: false }, ...prev]);
     setNewItemName(''); setNewItemAmount(1);
+  };
+
+  const toggleSummaryCheck = (id: string) => {
+    const next = new Set(checkedSummaryItems);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setCheckedSummaryItems(next);
   };
 
   return (
@@ -1311,13 +1326,37 @@ function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettin
         )}
       </div>
 
-      {list.length > 0 && <div className="fixed bottom-24 left-0 right-0 p-6 flex justify-center z-40"><button onClick={() => setShowSummary(true)} className="w-full md:w-auto bg-green-600 text-white px-12 py-5 rounded-[24px] font-black shadow-2xl">🚀 Consolider & Finaliser</button></div>}
+      {list.length > 0 && <div className="fixed bottom-24 left-0 right-0 p-6 flex justify-center z-40"><button onClick={() => { setCheckedSummaryItems(new Set()); setShowSummary(true); }} className="w-full md:w-auto bg-green-600 text-white px-12 py-5 rounded-[24px] font-black shadow-2xl">🚀 Consolider & Finaliser</button></div>}
 
       {showSummary && (
         <div className="fixed inset-0 z-[100] bg-white animate-fadeIn overflow-y-auto p-6">
           <div className="max-w-2xl mx-auto space-y-10">
-             <header className="flex justify-between items-center border-b pb-8"><h2 className="text-4xl font-black">Récapitulatif</h2><button onClick={() => setShowSummary(false)} className="p-4 bg-gray-100 rounded-full">×</button></header>
-             <div className="bg-white rounded-[40px] border border-gray-100 divide-y overflow-hidden shadow-sm">{consolidatedList.map(item => <div key={item.id} className="p-6 flex items-center justify-between"><span className="font-bold text-xl">{item.name}</span><span className="font-black text-purple-600 bg-purple-50 px-4 py-1.5 rounded-2xl text-sm">{item.amount} {item.unit}</span></div>)}</div>
+             <header className="flex justify-between items-center border-b pb-8">
+               <div className="flex items-center gap-4">
+                 <h2 className="text-4xl font-black">Récapitulatif</h2>
+                 <span className="bg-purple-100 text-purple-600 text-xl font-black px-3 py-1 rounded-2xl border border-purple-200 shadow-sm">
+                   {consolidatedList.filter(item => !checkedSummaryItems.has(item.id)).length}/{consolidatedList.length}
+                 </span>
+               </div>
+               <button onClick={() => setShowSummary(false)} className="p-4 bg-gray-100 rounded-full">×</button>
+             </header>
+             <div className="bg-white rounded-[40px] border border-gray-100 divide-y overflow-hidden shadow-sm">
+                {consolidatedList.map(item => (
+                  <div key={item.id} className="p-6 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div onClick={() => toggleSummaryCheck(item.id)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer ${checkedSummaryItems.has(item.id) ? 'bg-green-500 border-green-500' : 'border-gray-100 bg-white'}`}>
+                        {checkedSummaryItems.has(item.id) && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
+                      </div>
+                      <span className={`font-bold text-xl ${checkedSummaryItems.has(item.id) ? 'line-through text-gray-300' : 'text-gray-800'}`}>
+                        {item.name}
+                      </span>
+                    </div>
+                    <span className={`font-black text-purple-600 bg-purple-50 px-4 py-1.5 rounded-2xl text-sm ${checkedSummaryItems.has(item.id) ? 'opacity-50' : ''}`}>
+                      {item.amount} {item.unit}
+                    </span>
+                  </div>
+                ))}
+             </div>
              <button onClick={() => { setList([]); setShowSummary(false); }} className="w-full bg-green-600 text-white p-6 rounded-3xl font-black shadow-xl">🚀 Valider & Vider la liste</button>
           </div>
         </div>
