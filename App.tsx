@@ -39,6 +39,11 @@ const EXT_ICONS = {
     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
     </svg>
+  ),
+  Trash: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
   )
 };
 
@@ -164,6 +169,10 @@ export default function App() {
     }
     return [...prev, r];
   });
+
+  const deleteRecipe = (id: string) => {
+    setRecipes(prev => prev.filter(r => r.id !== id));
+  };
   
   const updateMealPlan = (date: string, type: 'lunch' | 'dinner', recipeId: string | undefined) => {
     setMealPlan(prev => ({
@@ -364,6 +373,7 @@ export default function App() {
           <RecipeBook 
             recipes={recipes} 
             addRecipe={addRecipe} 
+            deleteRecipe={deleteRecipe}
             onAddToShopping={(ings) => {
               const items: ShoppingListItem[] = ings.map(ing => ({
                 id: Math.random().toString(36).substr(2, 9),
@@ -609,9 +619,10 @@ function InStockView({ items, setItems, foodPortions, onAddFoodToSettings }: {
   );
 }
 
-function RecipeBook({ recipes, addRecipe, onAddToShopping, foodPortions, onAddFoodToSettings, updateMealPlan, setSentMeals }: { 
+function RecipeBook({ recipes, addRecipe, deleteRecipe, onAddToShopping, foodPortions, onAddFoodToSettings, updateMealPlan, setSentMeals }: { 
   recipes: Recipe[]; 
   addRecipe: (r: Recipe) => void; 
+  deleteRecipe: (id: string) => void;
   onAddToShopping: (ings: Ingredient[], title: string) => void;
   foodPortions: FoodPortion[];
   onAddFoodToSettings: (name: string, unit: string) => void;
@@ -635,10 +646,17 @@ function RecipeBook({ recipes, addRecipe, onAddToShopping, foodPortions, onAddFo
     setIsAdding(true);
   };
 
+  const handleDelete = (id: string) => {
+    deleteRecipe(id);
+    setIsAdding(false);
+    setEditingRecipe(null);
+  };
+
   if (isAdding) return (
     <RecipeForm 
       onSave={(r) => { addRecipe(r); setIsAdding(false); setEditingRecipe(null); }} 
       onCancel={() => { setIsAdding(false); setEditingRecipe(null); }} 
+      onDelete={handleDelete}
       foodPortions={foodPortions} 
       onAddFoodToSettings={onAddFoodToSettings}
       initialData={editingRecipe || undefined}
@@ -805,9 +823,10 @@ function RecipeDetail({ recipe, onClose, onAddToShopping, updateMealPlan, setSen
   );
 }
 
-function RecipeForm({ onSave, onCancel, foodPortions, onAddFoodToSettings, initialData }: { 
+function RecipeForm({ onSave, onCancel, onDelete, foodPortions, onAddFoodToSettings, initialData }: { 
   onSave: (r: Recipe) => void; 
   onCancel: () => void;
+  onDelete?: (id: string) => void;
   foodPortions: FoodPortion[];
   onAddFoodToSettings: (name: string, unit: string) => void;
   initialData?: Recipe;
@@ -825,6 +844,7 @@ function RecipeForm({ onSave, onCancel, foodPortions, onAddFoodToSettings, initi
 
   const [tm7Checked, setTm7Checked] = useState(initialData?.tags?.includes('TM7') || false);
   const [pendingIng, setPendingIng] = useState<Ingredient>({ name: '', amount: 1, unit: 'g' });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const totalTime = (formData.prepTime || 0) + (formData.cookTime || 0);
 
@@ -852,8 +872,19 @@ function RecipeForm({ onSave, onCancel, foodPortions, onAddFoodToSettings, initi
   };
 
   return (
-    <div className="max-w-4xl mx-auto bg-white p-8 md:p-12 rounded-[40px] shadow-2xl space-y-10 animate-slideUp">
-      <h3 className="text-4xl font-black text-gray-900 tracking-tight">{initialData ? 'Modifier la Recette' : 'Nouvelle Recette'}</h3>
+    <div className="max-w-4xl mx-auto bg-white p-8 md:p-12 rounded-[40px] shadow-2xl space-y-10 animate-slideUp relative">
+      <div className="flex justify-between items-start">
+        <h3 className="text-4xl font-black text-gray-900 tracking-tight">{initialData ? 'Modifier la Recette' : 'Nouvelle Recette'}</h3>
+        {initialData && onDelete && (
+          <button 
+            onClick={() => setShowDeleteConfirm(true)} 
+            className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
+            title="Supprimer la recette"
+          >
+            <EXT_ICONS.Trash />
+          </button>
+        )}
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-6">
@@ -960,6 +991,22 @@ function RecipeForm({ onSave, onCancel, foodPortions, onAddFoodToSettings, initi
              });
            }} className="flex-1 p-5 bg-purple-600 text-white rounded-2xl font-black shadow-xl shadow-purple-100 active:scale-95 transition-all">{initialData ? 'Mettre à jour' : 'Enregistrer la recette'}</button>
       </div>
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white rounded-[40px] p-8 max-w-sm w-full shadow-2xl text-center animate-slideUp">
+            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
+              <EXT_ICONS.Trash />
+            </div>
+            <h3 className="text-2xl font-black text-gray-800">Supprimer la recette ?</h3>
+            <p className="text-gray-500 mt-2 font-medium">Cette action est irréversible.</p>
+            <div className="flex gap-3 pt-8">
+              <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 p-4 bg-gray-100 text-gray-600 rounded-2xl font-black hover:bg-gray-200 transition-all">Annuler</button>
+              <button onClick={() => { setShowDeleteConfirm(false); onDelete!(initialData!.id); }} className="flex-1 p-4 bg-red-500 text-white rounded-2xl font-black shadow-lg shadow-red-100 hover:scale-[1.02] active:scale-95 transition-all">Supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1104,7 +1151,7 @@ function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, o
       {isAddingList && (
         <div className="bg-white p-8 md:p-10 rounded-[40px] border-2 border-purple-100 shadow-2xl space-y-8 animate-slideDown">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-             <input type="text" className="text-2xl font-black text-gray-800 outline-none border-b-2 border-transparent focus:border-purple-200 bg-transparent placeholder-gray-300 w-full sm:w-2/3" placeholder="NOM DE LA LISTE..." value={newListName} onChange={e => setNewListName(e.target.value)} />
+             <input type="text" className="text-2xl font-black text-gray-800 outline-none border-b-2 border-transparent focus:border-purple-200 bg-transparent placeholder-gray-300 w-full sm:w-2/3" placeholder="NOM DE LA LISTE..." value={newListName} onChange={e => setNewItemName(e.target.value)} />
              <div className="flex gap-2 w-full sm:w-auto">
                <button onClick={() => setIsAddingList(false)} className="flex-1 sm:flex-none px-6 py-3 bg-gray-100 text-gray-500 rounded-xl font-bold">Annuler</button>
                <button onClick={validateList} className="flex-1 sm:flex-none px-6 py-3 bg-green-600 text-white rounded-xl font-black shadow-lg shadow-green-100">Valider</button>
@@ -1350,7 +1397,16 @@ function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettin
         )}
       </div>
 
-      {list.length > 0 && <div className="fixed bottom-24 left-0 right-0 p-6 flex justify-center z-40"><button onClick={() => { setCheckedSummaryItems(new Set()); setShowSummary(true); }} className="w-full md:w-auto bg-green-600 text-white px-12 py-5 rounded-[24px] font-black shadow-2xl">🚀 Consolider & Finaliser</button></div>}
+      {list.length > 0 && (
+        <div className="mt-8 flex justify-center pb-10">
+          <button 
+            onClick={() => { setCheckedSummaryItems(new Set()); setShowSummary(true); }} 
+            className="w-full md:w-auto bg-green-600 text-white px-12 py-5 rounded-[24px] font-black shadow-2xl hover:scale-[1.02] active:scale-95 transition-all"
+          >
+            🚀 Consolider & Finaliser
+          </button>
+        </div>
+      )}
 
       {showSummary && (
         <div className="fixed inset-0 z-[100] bg-white animate-fadeIn overflow-y-auto p-6">
