@@ -2249,7 +2249,7 @@ const Settings: React.FC<{
   exportToExcel: () => void;
   importFromExcel: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }> = ({ settings, setSettings, exportToJSON, importFromJSON, exportToExcel, importFromExcel }) => {
-  const [activeSection, setActiveSection] = useState<string | null>('food');
+  const [activeSection, setActiveSection] = useState<string | null>(null);
   const [newFoodName, setNewFoodName] = useState('');
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
