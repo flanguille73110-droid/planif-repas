@@ -1,8 +1,22 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Recipe, MealPlanDay, ShoppingListItem, AppTab, UserSettings, Ingredient, FoodPortion } from './types';
-import { ICONS, CATEGORIES, DIETARY_OPTIONS } from './constants';
 
-// Extend ICONS
+// --- TYPES & CONSTANTS ---
+export type AppTab = 'recipes' | 'search' | 'planning' | 'recurring' | 'reserve' | 'shopping' | 'settings';
+export interface Ingredient { name: string; amount: number; unit: string; }
+export interface ShoppingListItem extends Ingredient { id: string; checked: boolean; }
+export interface Recipe { id: string; title: string; servings?: number; category?: string; prepTime: number; cookTime: number; tags?: string[]; ingredients: Ingredient[]; instructions?: string[]; imageUrl?: string; description?: string; }
+export interface FoodPortion { id: string; name: string; amount: number; unit: string; }
+export interface UserSettings { userName?: string; dietaryRestrictions?: string[]; foodPortions: FoodPortion[]; servingsDefault?: number; language?: string; }
+
+const CATEGORIES = ['Plats principaux', 'Entrées', 'Desserts', 'Bases', 'Petit-déjeuner'];
+const ICONS = {
+  Book: () => <span>📖</span>,
+  Search: () => <span>🔍</span>,
+  Calendar: () => <span>📅</span>,
+  Cart: () => <span>🛒</span>,
+  Settings: () => <span>⚙️</span>
+};
+
 const EXT_ICONS = {
   ...ICONS,
   Recurring: () => (
@@ -53,7 +67,6 @@ interface PantryGroup {
   items: ShoppingListItem[];
 }
 
-// --- Helper Functions ---
 const formatTotalTime = (minutes: number) => {
   if (minutes > 59) {
     const hours = Math.floor(minutes / 60);
@@ -63,8 +76,7 @@ const formatTotalTime = (minutes: number) => {
   return `${minutes} min`;
 };
 
-// --- Main App ---
-
+// --- MAIN APP ---
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('recipes');
   
@@ -135,7 +147,6 @@ export default function App() {
     localStorage.setItem('culina_sent_meals', JSON.stringify(Array.from(sentMeals)));
   }, [recipes, mealPlan, settings, shoppingList, pantryGroups, reserveItems, sentMeals]);
 
-  // Helper function to sync food names to settings
   const syncFoodsToSettings = useCallback((items: { name: string; unit?: string }[]) => {
     setSettings(prev => {
       const currentPortions = prev.foodPortions || [];
@@ -232,7 +243,6 @@ export default function App() {
         if (data.pantryGroups) setPantryGroups(data.pantryGroups);
         if (data.reserveItems) setReserveItems(data.reserveItems);
         
-        // Sync imported items to settings
         const itemsToSync: { name: string; unit?: string }[] = [];
         if (data.pantryGroups) data.pantryGroups.forEach((g: PantryGroup) => g.items.forEach(i => itemsToSync.push(i)));
         if (data.reserveItems) data.reserveItems.forEach((i: ShoppingListItem) => itemsToSync.push(i));
@@ -251,27 +261,15 @@ export default function App() {
       alert("La bibliothèque d'export Excel n'est pas chargée.");
       return;
     }
-    
     const workbook = XLSX.utils.book_new();
 
-    // Sheet 1: Récurrents
     const recurringData = pantryGroups.flatMap(group => 
-      group.items.map(item => ({
-        Liste: group.name,
-        Article: item.name,
-        Quantité: item.amount,
-        Unité: item.unit
-      }))
+      group.items.map(item => ({ Liste: group.name, Article: item.name, Quantité: item.amount, Unité: item.unit }))
     );
     const wsRecurring = XLSX.utils.json_to_sheet(recurringData);
     XLSX.utils.book_append_sheet(workbook, wsRecurring, "Récurrents");
 
-    // Sheet 2: En réserve
-    const reserveData = reserveItems.map(item => ({
-      Article: item.name,
-      Quantité: item.amount,
-      Unité: item.unit
-    }));
+    const reserveData = reserveItems.map(item => ({ Article: item.name, Quantité: item.amount, Unité: item.unit }));
     const wsReserve = XLSX.utils.json_to_sheet(reserveData);
     XLSX.utils.book_append_sheet(workbook, wsReserve, "reserves");
 
@@ -290,11 +288,9 @@ export default function App() {
         const wb = XLSX.read(bstr, { type: 'binary' });
         const itemsToSync: { name: string; unit?: string }[] = [];
         
-        // Process Récurrents
         if (wb.SheetNames.includes("Récurrents")) {
           const ws = wb.Sheets["Récurrents"];
           const data = XLSX.utils.sheet_to_json(ws) as any[];
-          
           setPantryGroups(prev => {
             const updatedGroups = [...prev];
             data.forEach(row => {
@@ -305,29 +301,20 @@ export default function App() {
               if (!itemName) return;
               
               itemsToSync.push({ name: itemName, unit: unit });
-
               let group = updatedGroups.find(g => g.name.toLowerCase() === listName.toLowerCase());
               if (!group) {
                 group = { id: Math.random().toString(36).substr(2, 9), name: listName, items: [] };
                 updatedGroups.push(group);
               }
-              group.items.push({
-                id: Math.random().toString(36).substr(2, 9),
-                name: itemName,
-                amount: amount,
-                unit: unit,
-                checked: false
-              });
+              group.items.push({ id: Math.random().toString(36).substr(2, 9), name: itemName, amount: amount, unit: unit, checked: false });
             });
             return updatedGroups;
           });
         }
 
-        // Process reserves
         if (wb.SheetNames.includes("reserves")) {
           const ws = wb.Sheets["reserves"];
           const data = XLSX.utils.sheet_to_json(ws) as any[];
-          
           setReserveItems(prev => {
             const updatedReserve = [...prev];
             data.forEach(row => {
@@ -337,24 +324,15 @@ export default function App() {
               if (!itemName) return;
               
               itemsToSync.push({ name: itemName, unit: unit });
-
-              // Eviter les doublons lors de l'import
               const exists = updatedReserve.find(i => i.name.toLowerCase() === itemName.toLowerCase());
               if (!exists) {
-                updatedReserve.push({
-                  id: Math.random().toString(36).substr(2, 9),
-                  name: itemName,
-                  amount: amount,
-                  unit: unit,
-                  checked: false
-                });
+                updatedReserve.push({ id: Math.random().toString(36).substr(2, 9), name: itemName, amount: amount, unit: unit, checked: false });
               }
             });
             return updatedReserve.sort((a, b) => a.name.localeCompare(b.name));
           });
         }
 
-        // Final sync of all imported names to settings
         syncFoodsToSettings(itemsToSync);
         alert("Données Excel importées !");
       } catch (err) {
@@ -362,7 +340,7 @@ export default function App() {
       }
     };
     reader.readAsBinaryString(file);
-    e.target.value = ""; // Reset input
+    e.target.value = "";
   };
 
   return (
@@ -374,7 +352,7 @@ export default function App() {
             recipes={recipes} 
             addRecipe={addRecipe} 
             deleteRecipe={deleteRecipe}
-            onAddToShopping={(ings) => {
+            onAddToShopping={(ings: Ingredient[]) => {
               const items: ShoppingListItem[] = ings.map(ing => ({
                 id: Math.random().toString(36).substr(2, 9),
                 name: ing.name,
@@ -394,7 +372,7 @@ export default function App() {
           <RecipeSearch 
             recipes={recipes} 
             addRecipe={addRecipe} 
-            onAddToShopping={(ings) => {
+            onAddToShopping={(ings: Ingredient[]) => {
               const items: ShoppingListItem[] = ings.map(ing => ({
                 id: Math.random().toString(36).substr(2, 9),
                 name: ing.name,
@@ -425,7 +403,7 @@ export default function App() {
             setGroups={setPantryGroups} 
             foodPortions={settings.foodPortions} 
             onAddFoodToSettings={handleQuickAddFoodToSettings}
-            onSendToShopping={(items) => {
+            onSendToShopping={(items: ShoppingListItem[]) => {
               const itemsToTransfer = items.filter(i => !i.checked);
               if (itemsToTransfer.length > 0) {
                 mergeToShoppingList(itemsToTransfer.map(i => ({ ...i, checked: false, id: Math.random().toString(36).substr(2, 9) })));
@@ -467,7 +445,7 @@ export default function App() {
   );
 }
 
-// --- Components ---
+// --- SOUS-COMPOSANTS ---
 
 function Navbar({ activeTab, setActiveTab }: { activeTab: AppTab; setActiveTab: (t: AppTab) => void }) {
   const tabs: { id: AppTab; label: string; icon: React.ReactNode }[] = [
@@ -493,12 +471,7 @@ function Navbar({ activeTab, setActiveTab }: { activeTab: AppTab; setActiveTab: 
   );
 }
 
-function InStockView({ items, setItems, foodPortions, onAddFoodToSettings }: {
-  items: ShoppingListItem[];
-  setItems: React.Dispatch<React.SetStateAction<ShoppingListItem[]>>;
-  foodPortions: FoodPortion[];
-  onAddFoodToSettings: (name: string, unit: string) => void;
-}) {
+function InStockView({ items, setItems, foodPortions, onAddFoodToSettings }: any) {
   const [newItemName, setNewItemName] = useState('');
   const [newItemAmount, setNewItemAmount] = useState(1);
   const [newItemUnit, setNewItemUnit] = useState('unité');
@@ -513,20 +486,16 @@ function InStockView({ items, setItems, foodPortions, onAddFoodToSettings }: {
       unit: newItemUnit,
       checked: false
     };
-    setItems(prev => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)));
+    setItems((prev: any) => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)));
     setNewItemName('');
     setNewItemAmount(1);
   };
 
-  const removeItem = (id: string) => setItems(items.filter(i => i.id !== id));
+  const removeItem = (id: string) => setItems(items.filter((i: any) => i.id !== id));
   
   const updateAmount = (id: string, newAmount: number) => {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, amount: newAmount } : i));
+    setItems((prev: any) => prev.map((i: any) => i.id === id ? { ...i, amount: newAmount } : i));
   };
-
-  const sortedItems = useMemo(() => {
-    return [...items].sort((a, b) => a.name.localeCompare(b.name));
-  }, [items]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn pb-10">
@@ -549,7 +518,7 @@ function InStockView({ items, setItems, foodPortions, onAddFoodToSettings }: {
               onKeyPress={e => e.key === 'Enter' && addItem()}
             />
             <datalist id="stock-food-suggestions">
-              {(foodPortions || []).map(fp => <option key={fp.id} value={fp.name} />)}
+              {(foodPortions || []).map((fp: any) => <option key={fp.id} value={fp.name} />)}
             </datalist>
           </div>
           <div className="sm:col-span-2">
@@ -588,10 +557,10 @@ function InStockView({ items, setItems, foodPortions, onAddFoodToSettings }: {
       </div>
 
       <div className="bg-white border border-gray-50 rounded-[40px] divide-y divide-gray-50 shadow-sm overflow-hidden">
-        {sortedItems.length === 0 ? (
+        {items.length === 0 ? (
           <div className="p-20 text-center text-gray-300 italic font-medium">Votre réserve est vide.</div>
         ) : (
-          sortedItems.map(i => (
+          items.map((i: any) => (
             <div key={i.id} className="p-5 flex gap-5 items-center hover:bg-purple-50/10 transition-all group">
               <div className="w-10 h-10 bg-purple-50 rounded-2xl flex items-center justify-center text-xl">📦</div>
               <p className="flex-1 font-bold text-lg text-gray-800">{i.name}</p>
@@ -619,23 +588,14 @@ function InStockView({ items, setItems, foodPortions, onAddFoodToSettings }: {
   );
 }
 
-function RecipeBook({ recipes, addRecipe, deleteRecipe, onAddToShopping, foodPortions, onAddFoodToSettings, updateMealPlan, setSentMeals }: { 
-  recipes: Recipe[]; 
-  addRecipe: (r: Recipe) => void; 
-  deleteRecipe: (id: string) => void;
-  onAddToShopping: (ings: Ingredient[], title: string) => void;
-  foodPortions: FoodPortion[];
-  onAddFoodToSettings: (name: string, unit: string) => void;
-  updateMealPlan: (date: string, type: 'lunch' | 'dinner', recipeId: string | undefined) => void;
-  setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
-}) {
+function RecipeBook({ recipes, addRecipe, deleteRecipe, onAddToShopping, foodPortions, onAddFoodToSettings, updateMealPlan, setSentMeals }: any) {
   const [filter, setFilter] = useState('');
   const [selectedCat, setSelectedCat] = useState('Tous');
   const [isAdding, setIsAdding] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [viewingRecipe, setViewingRecipe] = useState<Recipe | null>(null);
 
-  const filtered = (recipes || []).filter(r => 
+  const filtered = (recipes || []).filter((r: any) => 
     (selectedCat === 'Tous' || r.category === selectedCat) && 
     (r.title || "").toLowerCase().includes(filter.toLowerCase())
   );
@@ -654,7 +614,7 @@ function RecipeBook({ recipes, addRecipe, deleteRecipe, onAddToShopping, foodPor
 
   if (isAdding) return (
     <RecipeForm 
-      onSave={(r) => { addRecipe(r); setIsAdding(false); setEditingRecipe(null); }} 
+      onSave={(r: any) => { addRecipe(r); setIsAdding(false); setEditingRecipe(null); }} 
       onCancel={() => { setIsAdding(false); setEditingRecipe(null); }} 
       onDelete={handleDelete}
       foodPortions={foodPortions} 
@@ -687,7 +647,7 @@ function RecipeBook({ recipes, addRecipe, deleteRecipe, onAddToShopping, foodPor
         {filtered.length === 0 ? (
           <div className="col-span-full py-20 text-center text-gray-300 italic">Aucune recette enregistrée.</div>
         ) : (
-          filtered.map(r => (
+          filtered.map((r: any) => (
             <div key={r.id} onClick={() => setViewingRecipe(r)} className="bg-white rounded-[32px] overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all cursor-pointer group relative">
               <div className="aspect-video bg-purple-50 relative">
                 {r.imageUrl ? (
@@ -719,35 +679,23 @@ function RecipeBook({ recipes, addRecipe, deleteRecipe, onAddToShopping, foodPor
   );
 }
 
-function RecipeDetail({ recipe, onClose, onAddToShopping, updateMealPlan, setSentMeals }: { 
-  recipe: Recipe; 
-  onClose: () => void; 
-  onAddToShopping: (ings: Ingredient[], title: string) => void;
-  updateMealPlan: (date: string, type: 'lunch' | 'dinner', recipeId: string | undefined) => void;
-  setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
-}) {
+function RecipeDetail({ recipe, onClose, onAddToShopping, updateMealPlan, setSentMeals }: any) {
   const [servings, setServings] = useState(recipe.servings || 4);
   const [planDate, setPlanDate] = useState('');
   const [mealType, setMealType] = useState<'lunch' | 'dinner'>('lunch');
   const ratio = servings / (recipe.servings || 4);
 
   const handlePlan = () => {
-    if (!planDate) {
-      alert("Veuillez choisir une date.");
-      return;
-    }
+    if (!planDate) { alert("Veuillez choisir une date."); return; }
     updateMealPlan(planDate, mealType, recipe.id);
     alert(`Recette programmée pour le ${planDate} (${mealType === 'lunch' ? 'Midi' : 'Soir'})`);
   };
 
   const handlePlanAndSend = () => {
-    if (!planDate) {
-      alert("Veuillez choisir une date pour le planning.");
-      return;
-    }
+    if (!planDate) { alert("Veuillez choisir une date pour le planning."); return; }
     updateMealPlan(planDate, mealType, recipe.id);
-    onAddToShopping((recipe.ingredients || []).map(i => ({ ...i, amount: i.amount * ratio })), recipe.title);
-    setSentMeals(prev => new Set(prev).add(`${planDate}-${mealType}`));
+    onAddToShopping((recipe.ingredients || []).map((i: any) => ({ ...i, amount: i.amount * ratio })), recipe.title);
+    setSentMeals((prev: any) => new Set(prev).add(`${planDate}-${mealType}`));
     alert(`Recette planifiée et ingrédients envoyés !`);
     onClose();
   };
@@ -768,12 +716,7 @@ function RecipeDetail({ recipe, onClose, onAddToShopping, updateMealPlan, setSen
             <div className="bg-white p-6 rounded-[32px] border border-purple-50 space-y-4 shadow-sm">
               <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest">Planifier au menu</p>
               <div className="flex flex-col sm:flex-row gap-3">
-                <input 
-                  type="date" 
-                  className="flex-1 p-3 border border-gray-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-purple-200" 
-                  value={planDate} 
-                  onChange={e => setPlanDate(e.target.value)} 
-                />
+                <input type="date" className="flex-1 p-3 border border-gray-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-purple-200" value={planDate} onChange={e => setPlanDate(e.target.value)} />
                 <select className="p-3 border border-gray-100 rounded-2xl font-bold outline-none cursor-pointer bg-gray-50" value={mealType} onChange={e => setMealType(e.target.value as any)}>
                   <option value="lunch">Midi</option>
                   <option value="dinner">Soir</option>
@@ -784,13 +727,13 @@ function RecipeDetail({ recipe, onClose, onAddToShopping, updateMealPlan, setSen
 
             <div className="flex items-center gap-4 bg-purple-50 p-4 rounded-3xl">
               <span className="font-black text-sm text-purple-600">Portions :</span>
-              <button onClick={() => setServings(s => Math.max(1, s - 1))} className="w-8 h-8 bg-white rounded-lg font-black">-</button>
+              <button onClick={() => setServings((s: any) => Math.max(1, s - 1))} className="w-8 h-8 bg-white rounded-lg font-black">-</button>
               <span className="font-black w-8 text-center">{servings}</span>
-              <button onClick={() => setServings(s => s + 1)} className="w-8 h-8 bg-white rounded-lg font-black">+</button>
+              <button onClick={() => setServings((s: any) => s + 1)} className="w-8 h-8 bg-white rounded-lg font-black">+</button>
             </div>
 
             <div className="space-y-3">
-              <button onClick={() => onAddToShopping((recipe.ingredients || []).map(i => ({ ...i, amount: i.amount * ratio })), recipe.title)} className="w-full bg-purple-600 text-white p-5 rounded-3xl font-black shadow-lg shadow-purple-100 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest text-sm">🚀 Envoyer aux courses</button>
+              <button onClick={() => onAddToShopping((recipe.ingredients || []).map((i: any) => ({ ...i, amount: i.amount * ratio })), recipe.title)} className="w-full bg-purple-600 text-white p-5 rounded-3xl font-black shadow-lg shadow-purple-100 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest text-sm">🚀 Envoyer aux courses</button>
               <button onClick={handlePlanAndSend} className="w-full bg-green-600 text-white p-5 rounded-3xl font-black shadow-lg shadow-green-100 hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest text-sm">✅ Programmer & Envoyer</button>
             </div>
           </div>
@@ -800,7 +743,7 @@ function RecipeDetail({ recipe, onClose, onAddToShopping, updateMealPlan, setSen
               <span className="text-xs font-black text-purple-400">Total : {formatTotalTime(recipe.prepTime + recipe.cookTime)}</span>
             </div>
             <ul className="space-y-3">
-              {(recipe.ingredients || []).map((ing, i) => (
+              {(recipe.ingredients || []).map((ing: any, i: number) => (
                 <li key={i} className="flex justify-between border-b border-gray-200 pb-2">
                   <span className="font-medium text-gray-600">{ing.name}</span>
                   <span className="font-black text-purple-600">{Math.round(ing.amount * ratio * 100) / 100} {ing.unit}</span>
@@ -809,37 +752,14 @@ function RecipeDetail({ recipe, onClose, onAddToShopping, updateMealPlan, setSen
             </ul>
           </div>
         </div>
-        <div className="space-y-6">
-          <div className="space-y-4">
-            {(recipe.instructions || []).map((step, i) => (
-              <div key={i} className="flex gap-4">
-                <p className="text-gray-600 leading-relaxed font-medium">{step}</p>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
 }
 
-function RecipeForm({ onSave, onCancel, onDelete, foodPortions, onAddFoodToSettings, initialData }: { 
-  onSave: (r: Recipe) => void; 
-  onCancel: () => void;
-  onDelete?: (id: string) => void;
-  foodPortions: FoodPortion[];
-  onAddFoodToSettings: (name: string, unit: string) => void;
-  initialData?: Recipe;
-}) {
+function RecipeForm({ onSave, onCancel, onDelete, foodPortions, onAddFoodToSettings, initialData }: any) {
   const [formData, setFormData] = useState<Partial<Recipe>>(initialData || { 
-    title: '', 
-    servings: 4, 
-    category: CATEGORIES[1], 
-    ingredients: [], 
-    instructions: [''],
-    prepTime: 15,
-    cookTime: 20,
-    tags: []
+    title: '', servings: 4, category: CATEGORIES[1], ingredients: [], instructions: [''], prepTime: 15, cookTime: 20, tags: []
   });
 
   const [tm7Checked, setTm7Checked] = useState(initialData?.tags?.includes('TM7') || false);
@@ -851,18 +771,12 @@ function RecipeForm({ onSave, onCancel, onDelete, foodPortions, onAddFoodToSetti
   const addPendingIngredient = () => {
     if (!pendingIng.name.trim()) return;
     onAddFoodToSettings(pendingIng.name, pendingIng.unit);
-    setFormData(prev => ({
-      ...prev,
-      ingredients: [...(prev.ingredients || []), { ...pendingIng }]
-    }));
+    setFormData(prev => ({ ...prev, ingredients: [...(prev.ingredients || []), { ...pendingIng }] }));
     setPendingIng({ name: '', amount: 1, unit: 'g' });
   };
 
   const removeIngredient = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      ingredients: (prev.ingredients || []).filter((_, i) => i !== index)
-    }));
+    setFormData(prev => ({ ...prev, ingredients: (prev.ingredients || []).filter((_, i) => i !== index) }));
   };
 
   const editIngredient = (index: number) => {
@@ -876,17 +790,14 @@ function RecipeForm({ onSave, onCancel, onDelete, foodPortions, onAddFoodToSetti
       <div className="flex justify-between items-start">
         <h3 className="text-4xl font-black text-gray-900 tracking-tight">{initialData ? 'Modifier la Recette' : 'Nouvelle Recette'}</h3>
         {initialData && onDelete && (
-          <button 
-            onClick={() => setShowDeleteConfirm(true)} 
-            className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
-            title="Supprimer la recette"
-          >
+          <button onClick={() => setShowDeleteConfirm(true)} className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm" title="Supprimer">
             <EXT_ICONS.Trash />
           </button>
         )}
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* --- COLONNE GAUCHE --- */}
         <div className="space-y-6">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">Titre de la recette</label>
@@ -916,6 +827,7 @@ function RecipeForm({ onSave, onCancel, onDelete, foodPortions, onAddFoodToSetti
             </div>
           </div>
 
+          {/* TEMPS TOTAL ET PORTIONS BIEN PLACÉS ICI */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-green-400 uppercase tracking-widest ml-2">⌛ Temps Total</label>
@@ -930,6 +842,7 @@ function RecipeForm({ onSave, onCancel, onDelete, foodPortions, onAddFoodToSetti
           </div>
         </div>
 
+        {/* --- COLONNE DROITE --- */}
         <div className="space-y-6">
           <div className="space-y-3">
             <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">Aliments nécessaires</label>
@@ -946,7 +859,7 @@ function RecipeForm({ onSave, onCancel, onDelete, foodPortions, onAddFoodToSetti
               </select>
               <div className="col-span-6 relative">
                 <input list="recipe-food-suggestions" className="w-full p-3.5 border border-gray-100 rounded-xl bg-gray-50 font-bold text-xs outline-none focus:ring-2 focus:ring-purple-200 transition-all" placeholder="Nom aliment..." value={pendingIng.name} onChange={e => setPendingIng({ ...pendingIng, name: e.target.value })} onKeyPress={e => e.key === 'Enter' && addPendingIngredient()} />
-                <datalist id="recipe-food-suggestions">{(foodPortions || []).map(fp => <option key={fp.id} value={fp.name} />)}</datalist>
+                <datalist id="recipe-food-suggestions">{(foodPortions || []).map((fp: any) => <option key={fp.id} value={fp.name} />)}</datalist>
               </div>
               <button onClick={addPendingIngredient} className="col-span-12 mt-3 bg-purple-600 text-white p-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-purple-100 active:scale-95 transition-all">Ajouter à la liste</button>
             </div>
@@ -956,7 +869,7 @@ function RecipeForm({ onSave, onCancel, onDelete, foodPortions, onAddFoodToSetti
             {(formData.ingredients || []).length === 0 ? (
               <p className="text-center text-xs text-gray-300 italic py-10">Aucun aliment ajouté</p>
             ) : (
-              (formData.ingredients || []).map((ing, idx) => (
+              (formData.ingredients || []).map((ing: any, idx: number) => (
                 <div key={idx} className="flex justify-between items-center bg-gray-50/50 p-4 rounded-2xl border border-gray-100 animate-slideUp group">
                   <div className="flex gap-3 items-center">
                     <span className="font-black text-purple-600 text-xs w-14">{ing.amount} {ing.unit}</span>
@@ -980,7 +893,7 @@ function RecipeForm({ onSave, onCancel, onDelete, foodPortions, onAddFoodToSetti
                alert("Veuillez remplir le titre et au moins un ingrédient.");
                return;
              }
-             const baseTags = (formData.tags || []).filter(t => t !== 'TM7');
+             const baseTags = (formData.tags || []).filter((t: any) => t !== 'TM7');
              const tags = tm7Checked ? [...baseTags, 'TM7'] : baseTags;
              onSave({ 
                ...formData as Recipe, 
@@ -995,14 +908,11 @@ function RecipeForm({ onSave, onCancel, onDelete, foodPortions, onAddFoodToSetti
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6 animate-fadeIn">
           <div className="bg-white rounded-[40px] p-8 max-w-sm w-full shadow-2xl text-center animate-slideUp">
-            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
-              <EXT_ICONS.Trash />
-            </div>
+            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500"><EXT_ICONS.Trash /></div>
             <h3 className="text-2xl font-black text-gray-800">Supprimer la recette ?</h3>
-            <p className="text-gray-500 mt-2 font-medium">Cette action est irréversible.</p>
             <div className="flex gap-3 pt-8">
-              <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 p-4 bg-gray-100 text-gray-600 rounded-2xl font-black hover:bg-gray-200 transition-all">Annuler</button>
-              <button onClick={() => { setShowDeleteConfirm(false); onDelete!(initialData!.id); }} className="flex-1 p-4 bg-red-500 text-white rounded-2xl font-black shadow-lg shadow-red-100 hover:scale-[1.02] active:scale-95 transition-all">Supprimer</button>
+              <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 p-4 bg-gray-100 text-gray-600 rounded-2xl font-black">Annuler</button>
+              <button onClick={() => { setShowDeleteConfirm(false); onDelete!(initialData!.id); }} className="flex-1 p-4 bg-red-500 text-white rounded-2xl font-black">Supprimer</button>
             </div>
           </div>
         </div>
@@ -1011,14 +921,7 @@ function RecipeForm({ onSave, onCancel, onDelete, foodPortions, onAddFoodToSetti
   );
 }
 
-function RecipeSearch({ recipes, addRecipe, onAddToShopping, updateMealPlan, foodPortions, setSentMeals }: { 
-  recipes: Recipe[]; 
-  addRecipe: (r: Recipe) => void;
-  onAddToShopping: (ings: Ingredient[], title: string) => void;
-  updateMealPlan: (date: string, type: 'lunch' | 'dinner', recipeId: string | undefined) => void;
-  foodPortions: FoodPortion[];
-  setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
-}) {
+function RecipeSearch({ recipes, addRecipe, onAddToShopping, updateMealPlan, foodPortions, setSentMeals }: any) {
   const [ingredients, setIngredients] = useState<string[]>([]);
   const [inputIng, setInputIng] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1028,11 +931,11 @@ function RecipeSearch({ recipes, addRecipe, onAddToShopping, updateMealPlan, foo
 
   const handleSearch = () => {
     setLoading(true);
-    const matches = recipes.filter(r => {
+    const matches = recipes.filter((r: any) => {
       if (appliance === 'Thermomix TM7' && !r.tags?.includes('TM7')) return false;
       if (ingredients.length === 0) return true;
       return ingredients.some(searchIng => 
-        r.ingredients.some(ri => ri.name.toLowerCase().includes(searchIng.toLowerCase()))
+        r.ingredients.some((ri: any) => ri.name.toLowerCase().includes(searchIng.toLowerCase()))
       );
     });
     setResults(matches);
@@ -1057,7 +960,7 @@ function RecipeSearch({ recipes, addRecipe, onAddToShopping, updateMealPlan, foo
           <div className="flex gap-2 flex-wrap min-h-[40px]">{(ingredients || []).map(i => <span key={i} className="bg-purple-50 text-purple-600 px-4 py-1.5 rounded-full text-sm font-bold border border-purple-100 flex items-center gap-2">{i} <button onClick={() => setIngredients(ingredients.filter(x => x !== i))} className="hover:text-red-500 transition-colors">×</button></span>)}</div>
           <div className="flex gap-2">
             <input list="food-suggestions-search" className="flex-1 border-gray-100 border p-4 rounded-2xl outline-none focus:ring-2 focus:ring-purple-200 font-bold" placeholder="Ajouter un ingrédient..." value={inputIng} onChange={e => setInputIng(e.target.value)} onKeyPress={e => e.key === 'Enter' && (inputIng && (setIngredients([...ingredients, inputIng]), setInputIng('')))} />
-            <datalist id="food-suggestions-search">{(foodPortions || []).map(fp => <option key={fp.id} value={fp.name} />)}</datalist>
+            <datalist id="food-suggestions-search">{(foodPortions || []).map((fp: any) => <option key={fp.id} value={fp.name} />)}</datalist>
             <button onClick={() => { if(inputIng) {setIngredients([...ingredients, inputIng]); setInputIng('');} }} className="bg-gray-800 text-white px-6 rounded-2xl font-bold transition-all active:scale-95">Ajouter</button>
           </div>
         </div>
@@ -1082,13 +985,7 @@ function RecipeSearch({ recipes, addRecipe, onAddToShopping, updateMealPlan, foo
   );
 }
 
-function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, onSendToShopping }: { 
-  groups: PantryGroup[]; 
-  setGroups: React.Dispatch<React.SetStateAction<PantryGroup[]>>;
-  foodPortions: FoodPortion[];
-  onAddFoodToSettings: (name: string, unit: string) => void;
-  onSendToShopping: (items: ShoppingListItem[]) => void;
-}) {
+function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, onSendToShopping }: any) {
   const [isAddingList, setIsAddingList] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [newListName, setNewListName] = useState('');
@@ -1111,7 +1008,7 @@ function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, o
   const validateList = () => {
     if (!newListName.trim() || tempItems.length === 0) { alert("Veuillez remplir les champs."); return; }
     const sortedItems = [...tempItems].sort((a, b) => a.name.localeCompare(b.name));
-    if (editingGroupId) { setGroups(groups.map(g => g.id === editingGroupId ? { ...g, name: newListName.trim(), items: sortedItems } : g)); }
+    if (editingGroupId) { setGroups((groups: any) => groups.map((g: any) => g.id === editingGroupId ? { ...g, name: newListName.trim(), items: sortedItems } : g)); }
     else { setGroups([...groups, { id: Math.random().toString(36).substr(2, 9), name: newListName.trim(), items: sortedItems }]); }
     setNewListName(''); setTempItems([]); setEditingGroupId(null); setIsAddingList(false);
   };
@@ -1128,13 +1025,13 @@ function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, o
       if (!dataStr) return;
       const { itemId, sourceGroupId } = JSON.parse(dataStr);
       if (sourceGroupId === targetGroupId) return;
-      setGroups(prev => {
-        const sourceGroup = prev.find(g => g.id === sourceGroupId);
-        const itemToMove = sourceGroup?.items.find(i => i.id === itemId);
+      setGroups((prev: any) => {
+        const sourceGroup = prev.find((g: any) => g.id === sourceGroupId);
+        const itemToMove = sourceGroup?.items.find((i: any) => i.id === itemId);
         if (!itemToMove) return prev;
-        return prev.map(g => {
-          if (g.id === sourceGroupId) return { ...g, items: g.items.filter(i => i.id !== itemId) };
-          if (g.id === targetGroupId) return { ...g, items: [...g.items, itemToMove].sort((a, b) => a.name.localeCompare(b.name)) };
+        return prev.map((g: any) => {
+          if (g.id === sourceGroupId) return { ...g, items: g.items.filter((i: any) => i.id !== itemId) };
+          if (g.id === targetGroupId) return { ...g, items: [...g.items, itemToMove].sort((a: any, b: any) => a.name.localeCompare(b.name)) };
           return g;
         });
       });
@@ -1151,7 +1048,7 @@ function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, o
       {isAddingList && (
         <div className="bg-white p-8 md:p-10 rounded-[40px] border-2 border-purple-100 shadow-2xl space-y-8 animate-slideDown">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-             <input type="text" className="text-2xl font-black text-gray-800 outline-none border-b-2 border-transparent focus:border-purple-200 bg-transparent placeholder-gray-300 w-full sm:w-2/3" placeholder="NOM DE LA LISTE..." value={newListName} onChange={e => setNewItemName(e.target.value)} />
+             <input type="text" className="text-2xl font-black text-gray-800 outline-none border-b-2 border-transparent focus:border-purple-200 bg-transparent placeholder-gray-300 w-full sm:w-2/3" placeholder="NOM DE LA LISTE..." value={newListName} onChange={e => setNewListName(e.target.value)} />
              <div className="flex gap-2 w-full sm:w-auto">
                <button onClick={() => setIsAddingList(false)} className="flex-1 sm:flex-none px-6 py-3 bg-gray-100 text-gray-500 rounded-xl font-bold">Annuler</button>
                <button onClick={validateList} className="flex-1 sm:flex-none px-6 py-3 bg-green-600 text-white rounded-xl font-black shadow-lg shadow-green-100">Valider</button>
@@ -1161,7 +1058,7 @@ function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, o
               <div className="sm:col-span-5 relative">
                 <input list="pantry-suggestions" className="w-full p-4 rounded-2xl border border-gray-100 font-bold outline-none" placeholder="Rechercher article..." value={newItemName} onChange={e => setNewItemName(e.target.value)} onKeyPress={e => e.key === 'Enter' && addTempItem()} />
                 <datalist id="pantry-suggestions">
-                  {(foodPortions || []).map(fp => <option key={fp.id} value={fp.name} />)}
+                  {(foodPortions || []).map((fp: any) => <option key={fp.id} value={fp.name} />)}
                 </datalist>
               </div>
               <input type="number" className="sm:col-span-2 p-4 rounded-2xl border border-gray-100 font-black text-center text-purple-600" value={newItemAmount} onChange={e => setNewItemAmount(Number(e.target.value))} />
@@ -1189,13 +1086,13 @@ function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, o
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {groups.map(group => (
+        {groups.map((group: any) => (
           <div key={group.id} onDragOver={e => { e.preventDefault(); setDragOverGroupId(group.id); }} onDragLeave={() => setDragOverGroupId(null)} onDrop={e => onDrop(e, group.id)} className={`bg-white rounded-[40px] border-2 transition-all shadow-sm overflow-hidden flex flex-col animate-slideUp ${dragOverGroupId === group.id ? 'border-purple-400 scale-[1.02]' : 'border-gray-100'}`}>
              <div className="p-6 bg-purple-50/30 flex justify-between items-center border-b">
                 <div className="flex items-center gap-3">
                   <h3 className="text-xl font-black text-gray-800 uppercase">{group.name}</h3>
                   <span className="bg-purple-100 text-purple-600 text-[10px] font-black px-2 py-1 rounded-lg border border-purple-200 shadow-sm">
-                    {group.items.filter(i => !i.checked).length}/{group.items.length}
+                    {group.items.filter((i: any) => !i.checked).length}/{group.items.length}
                   </span>
                 </div>
                 <div className="flex gap-2">
@@ -1205,11 +1102,11 @@ function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, o
                 </div>
              </div>
              <div className="p-6 divide-y">
-                {group.items.slice().sort((a, b) => a.name.localeCompare(b.name)).map(item => (
+                {group.items.slice().sort((a: any, b: any) => a.name.localeCompare(b.name)).map((item: any) => (
                   <div key={item.id} draggable="true" onDragStart={e => onDragStart(e, item.id, group.id)} onContextMenu={e => e.preventDefault()} style={{ WebkitTouchCallout: 'none', touchAction: 'none' }} className={`py-4 flex gap-4 items-center cursor-grab active:cursor-grabbing hover:bg-purple-50/50 px-2 rounded-xl transition-all select-none ${item.checked ? 'opacity-60' : ''}`}>
-                    <div onClick={() => setGroups(groups.map(g => g.id === group.id ? { ...g, items: g.items.map(i => i.id === item.id ? { ...i, checked: !i.checked } : i) } : g))} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${item.checked ? 'bg-green-500 border-green-500' : 'border-gray-100 bg-white'}`}>{item.checked && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}</div>
+                    <div onClick={() => setGroups((groups: any) => groups.map((g: any) => g.id === group.id ? { ...g, items: g.items.map((i: any) => i.id === item.id ? { ...i, checked: !i.checked } : i) } : g))} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${item.checked ? 'bg-green-500 border-green-500' : 'border-gray-100 bg-white'}`}>{item.checked && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}</div>
                     <span className={`flex-1 font-bold ${item.checked ? 'line-through text-gray-300' : 'text-gray-700'}`}>{item.name}</span>
-                    <input type="number" className="w-12 p-1 text-center font-black text-xs bg-purple-50 rounded-lg outline-none" value={item.amount} onChange={e => setGroups(groups.map(g => g.id === group.id ? { ...g, items: g.items.map(i => i.id === item.id ? { ...i, amount: Number(e.target.value) } : i) } : g))} onFocus={e => e.target.select()} />
+                    <input type="number" className="w-12 p-1 text-center font-black text-xs bg-purple-50 rounded-lg outline-none" value={item.amount} onChange={e => setGroups((groups: any) => groups.map((g: any) => g.id === group.id ? { ...g, items: g.items.map((i: any) => i.id === item.id ? { ...i, amount: Number(e.target.value) } : i) } : g))} onFocus={e => e.target.select()} />
                     <span className="text-[10px] font-black text-purple-400">{item.unit}</span>
                   </div>
                 ))}
@@ -1224,7 +1121,7 @@ function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, o
             <h3 className="text-xl font-black">Supprimer la liste ?</h3>
             <div className="flex gap-3 pt-6">
               <button onClick={() => setConfirmDeleteId(null)} className="flex-1 p-4 bg-gray-100 rounded-2xl font-black">Annuler</button>
-              <button onClick={() => { setGroups(groups.filter(g => g.id !== confirmDeleteId)); setConfirmDeleteId(null); }} className="flex-1 p-4 bg-red-500 text-white rounded-2xl font-black">Supprimer</button>
+              <button onClick={() => { setGroups((groups: any) => groups.filter((g: any) => g.id !== confirmDeleteId)); setConfirmDeleteId(null); }} className="flex-1 p-4 bg-red-500 text-white rounded-2xl font-black">Supprimer</button>
             </div>
           </div>
         </div>
@@ -1233,14 +1130,7 @@ function RecurringView({ groups, setGroups, foodPortions, onAddFoodToSettings, o
   );
 }
 
-function Planning({ mealPlan, recipes, updateMealPlan, onMergeToShopping, sentMeals, setSentMeals }: { 
-  mealPlan: Record<string, { lunch?: string; dinner?: string }>; 
-  recipes: Recipe[]; 
-  updateMealPlan: (d: string, t: 'lunch' | 'dinner', r: string | undefined) => void;
-  onMergeToShopping: (items: ShoppingListItem[]) => void;
-  sentMeals: Set<string>;
-  setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
-}) {
+function Planning({ mealPlan, recipes, updateMealPlan, onMergeToShopping, sentMeals, setSentMeals }: any) {
   const [showSummary, setShowSummary] = useState(false);
   const [baseDate, setBaseDate] = useState(() => {
     const d = new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); return new Date(d.setDate(diff));
@@ -1248,10 +1138,52 @@ function Planning({ mealPlan, recipes, updateMealPlan, onMergeToShopping, sentMe
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(baseDate); d.setDate(baseDate.getDate() + i); return d; });
 
   const handleSendRecipe = (date: string, type: 'lunch' | 'dinner', recipeId: string) => {
-    const recipe = recipes.find(r => r.id === recipeId);
+    const recipe = recipes.find((r: any) => r.id === recipeId);
     if (!recipe) return;
-    const items: ShoppingListItem[] = recipe.ingredients.map(ing => ({ id: Math.random().toString(36).substr(2, 9), name: ing.name, amount: ing.amount, unit: ing.unit, checked: false }));
-    onMergeToShopping(items); setSentMeals(prev => new Set(prev).add(`${date}-${type}`));
+    const items: ShoppingListItem[] = recipe.ingredients.map((ing: any) => ({ id: Math.random().toString(36).substr(2, 9), name: ing.name, amount: ing.amount, unit: ing.unit, checked: false }));
+    onMergeToShopping(items); setSentMeals((prev: any) => new Set(prev).add(`${date}-${type}`));
+  };
+
+  // NOUVELLE FONCTION : TOUT ENVOYER AUX COURSES
+  const handleSendAll = () => {
+    let allItems: any[] = [];
+    const newSentMeals = new Set(sentMeals);
+    let addedCount = 0;
+
+    days.forEach(d => {
+      const key = d.toISOString().split('T')[0];
+      const plan = mealPlan[key];
+      if (!plan) return;
+
+      (['lunch', 'dinner'] as const).forEach(type => {
+        const recipeId = plan[type];
+        // Si un repas est programmé et n'a pas encore été envoyé
+        if (recipeId && !sentMeals.has(`${key}-${type}`)) {
+          const recipe = recipes.find((r: any) => r.id === recipeId);
+          if (recipe) {
+            const items = recipe.ingredients.map((ing: any) => ({
+              id: Math.random().toString(36).substr(2, 9),
+              name: ing.name,
+              amount: ing.amount,
+              unit: ing.unit,
+              checked: false
+            }));
+            allItems = [...allItems, ...items];
+            newSentMeals.add(`${key}-${type}`);
+            addedCount++;
+          }
+        }
+      });
+    });
+
+    if (addedCount > 0) {
+      onMergeToShopping(allItems);
+      setSentMeals(newSentMeals);
+      alert(`${addedCount} repas envoyé(s) aux courses !`);
+    } else {
+      alert("Tous les repas de cette semaine ont déjà été envoyés.");
+    }
+    setShowSummary(false); // Ferme la fenêtre après l'envoi
   };
 
   return (
@@ -1276,7 +1208,7 @@ function Planning({ mealPlan, recipes, updateMealPlan, onMergeToShopping, sentMe
                   <div key={type} className="space-y-1">
                     <div className="flex justify-between items-center"><label className="text-[10px] font-black uppercase text-gray-400">{type === 'lunch' ? 'Déjeuner' : 'Dîner'}</label>{sentMeals.has(`${key}-${type}`) && <span className="text-green-500"><EXT_ICONS.Check /></span>}</div>
                     <select className="w-full text-xs font-bold bg-gray-50 p-3 rounded-xl border-transparent focus:border-purple-200 outline-none" value={mealPlan[key]?.[type] || ''} onChange={e => updateMealPlan(key, type, e.target.value || undefined)}>
-                      <option value="">Vide</option>{recipes.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+                      <option value="">Vide</option>{recipes.map((r: any) => <option key={r.id} value={r.id}>{r.title}</option>)}
                     </select>
                   </div>
                 ))}
@@ -1297,13 +1229,19 @@ function Planning({ mealPlan, recipes, updateMealPlan, onMergeToShopping, sentMe
                 return (
                   <div key={key} className="space-y-2">
                     <p className="text-[10px] font-black text-purple-400 uppercase border-b">{d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' })}</p>
-                    {plan.lunch && <div className="p-3 bg-gray-50 rounded-xl flex justify-between items-center"><span className="font-bold">{recipes.find(r => r.id === plan.lunch)?.title} (Midi)</span>{sentMeals.has(`${key}-lunch`) ? <span className="text-green-600 font-black">✓</span> : <button onClick={() => handleSendRecipe(key, 'lunch', plan.lunch!)} className="text-purple-600 font-black">🚀 Envoyer</button>}</div>}
-                    {plan.dinner && <div className="p-3 bg-gray-50 rounded-xl flex justify-between items-center"><span className="font-bold">{recipes.find(r => r.id === plan.dinner)?.title} (Soir)</span>{sentMeals.has(`${key}-dinner`) ? <span className="text-green-600 font-black">✓</span> : <button onClick={() => handleSendRecipe(key, 'dinner', plan.dinner!)} className="text-purple-600 font-black">🚀 Envoyer</button>}</div>}
+                    {plan.lunch && <div className="p-3 bg-gray-50 rounded-xl flex justify-between items-center"><span className="font-bold">{recipes.find((r: any) => r.id === plan.lunch)?.title} (Midi)</span>{sentMeals.has(`${key}-lunch`) ? <span className="text-green-600 font-black">✓</span> : <button onClick={() => handleSendRecipe(key, 'lunch', plan.lunch!)} className="text-purple-600 font-black">🚀 Envoyer</button>}</div>}
+                    {plan.dinner && <div className="p-3 bg-gray-50 rounded-xl flex justify-between items-center"><span className="font-bold">{recipes.find((r: any) => r.id === plan.dinner)?.title} (Soir)</span>{sentMeals.has(`${key}-dinner`) ? <span className="text-green-600 font-black">✓</span> : <button onClick={() => handleSendRecipe(key, 'dinner', plan.dinner!)} className="text-purple-600 font-black">🚀 Envoyer</button>}</div>}
                   </div>
                 );
               })}
             </div>
-            <button onClick={() => setShowSummary(false)} className="w-full p-4 bg-gray-100 rounded-3xl font-black">Fermer</button>
+            
+            {/* LES DEUX BOUTONS : FERMER ET TOUT ENVOYER */}
+            <div className="space-y-3 pt-4 border-t border-gray-100">
+              <button onClick={() => setShowSummary(false)} className="w-full p-4 bg-gray-100 text-gray-700 rounded-3xl font-black transition-all hover:bg-gray-200">Fermer</button>
+              <button onClick={handleSendAll} className="w-full p-4 bg-purple-600 text-white rounded-3xl font-black shadow-xl hover:scale-[1.02] active:scale-95 transition-all">🚀 Tout envoyer aux courses</button>
+            </div>
+
           </div>
         </div>
       )}
@@ -1311,14 +1249,7 @@ function Planning({ mealPlan, recipes, updateMealPlan, onMergeToShopping, sentMe
   );
 }
 
-function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettings, reserveItems }: { 
-  list: ShoppingListItem[]; 
-  setList: React.Dispatch<React.SetStateAction<ShoppingListItem[]>>; 
-  settings: UserSettings;
-  foodPortions: FoodPortion[];
-  onAddFoodToSettings: (name: string, unit: string) => void;
-  reserveItems: ShoppingListItem[];
-}) {
+function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettings, reserveItems }: any) {
   const [showSummary, setShowSummary] = useState(false);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [showReserveOnSide, setShowReserveOnSide] = useState(false);
@@ -1326,12 +1257,11 @@ function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettin
   const [newItemAmount, setNewItemAmount] = useState(1);
   const [newItemUnit, setNewItemUnit] = useState('unité');
   
-  // State for summary checkboxes
   const [checkedSummaryItems, setCheckedSummaryItems] = useState<Set<string>>(new Set());
 
   const consolidatedList = useMemo(() => {
     const map = new Map<string, ShoppingListItem>();
-    list.forEach(item => {
+    list.forEach((item: any) => {
       const key = `${item.name.toLowerCase()}_${item.unit.toLowerCase()}`;
       if (map.has(key)) map.get(key)!.amount += item.amount;
       else map.set(key, { ...item, id: Math.random().toString(36).substr(2, 9) });
@@ -1342,7 +1272,7 @@ function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettin
   const handleAddItem = () => {
     if (!newItemName.trim()) return;
     onAddFoodToSettings(newItemName.trim(), newItemUnit);
-    setList(prev => [{ id: Math.random().toString(36).substr(2, 9), name: newItemName.trim(), amount: newItemAmount, unit: newItemUnit, checked: false }, ...prev]);
+    setList((prev: any) => [{ id: Math.random().toString(36).substr(2, 9), name: newItemName.trim(), amount: newItemAmount, unit: newItemUnit, checked: false }, ...prev]);
     setNewItemName(''); setNewItemAmount(1);
   };
 
@@ -1368,7 +1298,7 @@ function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettin
         <div className="flex flex-col sm:flex-row gap-3">
           <input list="food-suggestions-shopping" className="flex-1 p-3.5 border border-gray-100 rounded-2xl bg-gray-50 font-bold outline-none" placeholder="Aliment..." value={newItemName} onChange={e => setNewItemName(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleAddItem()} />
           <datalist id="food-suggestions-shopping">
-            {(foodPortions || []).map(fp => <option key={fp.id} value={fp.name} />)}
+            {(foodPortions || []).map((fp: any) => <option key={fp.id} value={fp.name} />)}
           </datalist>
           <div className="flex gap-2">
             <input type="number" className="w-20 p-3.5 border border-gray-100 rounded-2xl font-black text-center text-purple-600" value={newItemAmount} onChange={e => setNewItemAmount(Number(e.target.value))} />
@@ -1380,31 +1310,26 @@ function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettin
 
       <div className={`flex flex-col ${showReserveOnSide ? 'lg:flex-row' : ''} gap-8`}>
         <div className="flex-1 bg-white border border-gray-50 rounded-[40px] divide-y divide-gray-50 shadow-sm overflow-hidden">
-          {list.slice().sort((a,b) => a.name.localeCompare(b.name)).map(i => (
+          {list.slice().sort((a: any,b: any) => a.name.localeCompare(b.name)).map((i: any) => (
             <div key={i.id} className="p-5 flex gap-5 items-center">
-              <div onClick={() => setList(list.map(x => x.id === i.id ? { ...x, checked: !x.checked } : x))} className={`w-7 h-7 rounded-2xl border-2 flex items-center justify-center transition-all cursor-pointer ${i.checked ? 'bg-green-500 border-green-500' : 'border-gray-100 bg-white'}`}>{i.checked && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}</div>
+              <div onClick={() => setList(list.map((x: any) => x.id === i.id ? { ...x, checked: !x.checked } : x))} className={`w-7 h-7 rounded-2xl border-2 flex items-center justify-center transition-all cursor-pointer ${i.checked ? 'bg-green-500 border-green-500' : 'border-gray-100 bg-white'}`}>{i.checked && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}</div>
               <p className={`flex-1 font-bold text-lg ${i.checked ? 'line-through text-gray-300' : 'text-gray-800'}`}>{i.name}</p>
-              <input type="number" className="w-12 p-1 text-center font-black text-xs bg-purple-50 text-purple-600 rounded-lg outline-none" value={i.amount} onChange={e => setList(list.map(x => x.id === i.id ? { ...x, amount: Number(e.target.value) } : x))} />
-              <button onClick={() => setList(list.filter(x => x.id !== i.id))} className="text-gray-200 font-bold text-xl ml-2">×</button>
+              <input type="number" className="w-12 p-1 text-center font-black text-xs bg-purple-50 text-purple-600 rounded-lg outline-none" value={i.amount} onChange={e => setList(list.map((x: any) => x.id === i.id ? { ...x, amount: Number(e.target.value) } : x))} />
+              <button onClick={() => setList(list.filter((x: any) => x.id !== i.id))} className="text-gray-200 font-bold text-xl ml-2">×</button>
             </div>
           ))}
         </div>
         {showReserveOnSide && (
           <div className="w-full lg:w-80 bg-white border border-purple-50 rounded-[40px] shadow-sm flex flex-col h-fit max-h-[600px] overflow-hidden">
             <div className="p-6 bg-purple-50/30 border-b"><h3 className="text-lg font-black text-purple-600 uppercase">Ma Réserve</h3></div>
-            <div className="overflow-y-auto p-4 space-y-3">{reserveItems.slice().sort((a,b) => a.name.localeCompare(b.name)).map(item => <div key={item.id} className="flex justify-between items-center text-sm font-bold text-gray-700"><span>{item.name}</span><span className="text-[10px] bg-purple-50 px-2 py-1 rounded-lg">{item.amount} {item.unit}</span></div>)}</div>
+            <div className="overflow-y-auto p-4 space-y-3">{reserveItems.slice().sort((a: any,b: any) => a.name.localeCompare(b.name)).map((item: any) => <div key={item.id} className="flex justify-between items-center text-sm font-bold text-gray-700"><span>{item.name}</span><span className="text-[10px] bg-purple-50 px-2 py-1 rounded-lg">{item.amount} {item.unit}</span></div>)}</div>
           </div>
         )}
       </div>
 
       {list.length > 0 && (
         <div className="mt-8 flex justify-center pb-10">
-          <button 
-            onClick={() => { setCheckedSummaryItems(new Set()); setShowSummary(true); }} 
-            className="w-full md:w-auto bg-green-600 text-white px-12 py-5 rounded-[24px] font-black shadow-2xl hover:scale-[1.02] active:scale-95 transition-all"
-          >
-            🚀 Consolider & Finaliser
-          </button>
+          <button onClick={() => { setCheckedSummaryItems(new Set()); setShowSummary(true); }} className="w-full md:w-auto bg-green-600 text-white px-12 py-5 rounded-[24px] font-black shadow-2xl hover:scale-[1.02] active:scale-95 transition-all">🚀 Consolider & Finaliser</button>
         </div>
       )}
 
@@ -1427,13 +1352,9 @@ function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettin
                       <div onClick={() => toggleSummaryCheck(item.id)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer ${checkedSummaryItems.has(item.id) ? 'bg-green-500 border-green-500' : 'border-gray-100 bg-white'}`}>
                         {checkedSummaryItems.has(item.id) && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
                       </div>
-                      <span className={`font-bold text-xl ${checkedSummaryItems.has(item.id) ? 'line-through text-gray-300' : 'text-gray-800'}`}>
-                        {item.name}
-                      </span>
+                      <span className={`font-bold text-xl ${checkedSummaryItems.has(item.id) ? 'line-through text-gray-300' : 'text-gray-800'}`}>{item.name}</span>
                     </div>
-                    <span className={`font-black text-purple-600 bg-purple-50 px-4 py-1.5 rounded-2xl text-sm ${checkedSummaryItems.has(item.id) ? 'opacity-50' : ''}`}>
-                      {item.amount} {item.unit}
-                    </span>
+                    <span className={`font-black text-purple-600 bg-purple-50 px-4 py-1.5 rounded-2xl text-sm ${checkedSummaryItems.has(item.id) ? 'opacity-50' : ''}`}>{item.amount} {item.unit}</span>
                   </div>
                 ))}
              </div>
@@ -1453,14 +1374,7 @@ function ShoppingView({ list, setList, settings, foodPortions, onAddFoodToSettin
   );
 }
 
-function Settings({ settings, setSettings, exportToJSON, importFromJSON, exportToExcel, importFromExcel }: { 
-  settings: UserSettings; 
-  setSettings: React.Dispatch<React.SetStateAction<UserSettings>>;
-  exportToJSON: () => void;
-  importFromJSON: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  exportToExcel: () => void;
-  importFromExcel: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}) {
+function Settings({ settings, setSettings, exportToJSON, importFromJSON, exportToExcel, importFromExcel }: any) {
   const [activeSection, setActiveSection] = useState<string | null>('food');
   const [newFoodName, setNewFoodName] = useState('');
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
@@ -1468,7 +1382,7 @@ function Settings({ settings, setSettings, exportToJSON, importFromJSON, exportT
 
   const saveFoodName = (id: string) => {
     if (!editingName.trim()) return;
-    setSettings(prev => ({ ...prev, foodPortions: (prev.foodPortions || []).map(f => f.id === id ? { ...f, name: editingName.trim() } : f) }));
+    setSettings((prev: any) => ({ ...prev, foodPortions: (prev.foodPortions || []).map((f: any) => f.id === id ? { ...f, name: editingName.trim() } : f) }));
     setEditingFoodId(null);
   };
 
@@ -1488,12 +1402,12 @@ function Settings({ settings, setSettings, exportToJSON, importFromJSON, exportT
                 <button onClick={() => { if(!newFoodName.trim()) return; setSettings({ ...settings, foodPortions: [...(settings.foodPortions || []), { id: Math.random().toString(36).substr(2, 9), name: newFoodName.trim(), amount: 1, unit: 'g' }] }); setNewFoodName(''); }} className="bg-purple-600 text-white px-8 rounded-2xl font-black">Ajouter</button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(settings.foodPortions || []).slice().sort((a,b) => a.name.localeCompare(b.name)).map(p => (
+                {(settings.foodPortions || []).slice().sort((a: any,b: any) => a.name.localeCompare(b.name)).map((p: any) => (
                   <div key={p.id} className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
                     {editingFoodId === p.id ? (
                       <div className="flex-1 flex gap-2"><input className="flex-1 p-2 border border-purple-200 rounded-lg outline-none font-bold text-gray-700 bg-purple-50" value={editingName} onChange={e => setEditingName(e.target.value)} onKeyPress={e => e.key === 'Enter' && saveFoodName(p.id)} autoFocus /><button onClick={() => saveFoodName(p.id)} className="bg-green-500 text-white p-2 rounded-lg"><EXT_ICONS.Check /></button></div>
                     ) : (
-                      <><span className="flex-1 font-bold text-gray-700">{p.name}</span><div className="flex gap-2"><button onClick={() => { setEditingFoodId(p.id); setEditingName(p.name); }} className="text-gray-300 hover:text-purple-600 p-2"><EXT_ICONS.Edit /></button><button onClick={() => setSettings({ ...settings, foodPortions: (settings.foodPortions || []).filter(x => x.id !== p.id) })} className="text-red-400 font-bold text-xl p-2">×</button></div></>
+                      <><span className="flex-1 font-bold text-gray-700">{p.name}</span><div className="flex gap-2"><button onClick={() => { setEditingFoodId(p.id); setEditingName(p.name); }} className="text-gray-300 hover:text-purple-600 p-2"><EXT_ICONS.Edit /></button><button onClick={() => setSettings({ ...settings, foodPortions: (settings.foodPortions || []).filter((x: any) => x.id !== p.id) })} className="text-red-400 font-bold text-xl p-2">×</button></div></>
                     )}
                   </div>
                 ))}
