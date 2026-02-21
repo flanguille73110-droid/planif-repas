@@ -670,25 +670,20 @@ const RecipeBook: React.FC<{
         ) : (
           filtered.map(r => (
             <div key={r.id} onClick={() => setViewingRecipe(r)} className="bg-white rounded-[32px] overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all cursor-pointer group relative">
-              <div className="aspect-video bg-purple-50 relative">
-                {r.imageUrl ? (
-                  <img src={r.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={r.title} />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-purple-200"><EXT_ICONS.Book /></div>
-                )}
-                <div className="absolute top-4 left-4 flex flex-col gap-2">
-                  {r.tags?.includes('TM7') && <span className="bg-green-600 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest shadow-sm">TM7</span>}
-                </div>
-                <button onClick={(e) => handleEdit(e, r)} className="absolute top-4 right-4 bg-white/90 p-2 rounded-xl text-purple-600 opacity-0 group-hover:opacity-100 transition-all shadow-md">
-                  <EXT_ICONS.Edit />
-                </button>
-              </div>
               <div className="p-6">
-                <div className="flex justify-between items-start">
-                  <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">{r.category}</span>
-                  <span className="text-[10px] font-black text-gray-400 flex items-center gap-1">⏲️ {formatTotalTime(r.prepTime + r.cookTime)}</span>
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">{r.category}</span>
+                      {r.tags?.includes('TM7') && <span className="bg-green-600 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest shadow-sm">TM7</span>}
+                    </div>
+                    <span className="text-[10px] font-black text-gray-400 flex items-center gap-1">⏲️ {formatTotalTime(r.prepTime + r.cookTime)}</span>
+                  </div>
+                  <button onClick={(e) => handleEdit(e, r)} className="bg-purple-50 p-2 rounded-xl text-purple-600 hover:bg-purple-100 transition-all shadow-sm">
+                    <EXT_ICONS.Edit />
+                  </button>
                 </div>
-                <h3 className="text-xl font-black text-gray-800 mt-1 line-clamp-1">{r.title}</h3>
+                <h3 className="text-xl font-black text-gray-800 break-words">{r.title}</h3>
               </div>
             </div>
           ))
