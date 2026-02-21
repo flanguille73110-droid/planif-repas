@@ -35,6 +35,8 @@ export interface MealSlot {
 export interface MealPlanDay {
   lunch?: MealSlot;
   dinner?: MealSlot;
+  viennoiseries?: string[]; // recipe IDs
+  sauces?: string[];        // recipe IDs
 }
 
 export interface ShoppingListItem {

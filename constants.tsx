@@ -6,8 +6,10 @@ export const CATEGORIES = [
   'Plat Principal',
   'Dessert',
   'Snack',
-  'Petit Déjeuner',
-  'Boisson'
+  'Viennoiserie',
+  'Sauce',
+  'Gâteaux',
+  'Coulis'
 ];
 
 export const DIETARY_OPTIONS = [

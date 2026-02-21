@@ -148,22 +148,37 @@ export default function App() {
 
   const deleteRecipe = (id: string) => setRecipes(prev => prev.filter(r => r.id !== id));
   
-  const updateMealPlan = (date: string, mealType: 'lunch' | 'dinner', slot: 'starter' | 'main' | 'dessert', recipeId: string | undefined) => {
+  const updateMealPlan = (date: string, mealType: 'lunch' | 'dinner' | 'extra', slot: 'starter' | 'main' | 'dessert' | 'viennoiseries' | 'sauces', recipeId: string | undefined, index?: number) => {
     setMealPlan(prev => {
       const day = prev[date] || {};
-      const meal = day[mealType] || {};
+      if (mealType === 'extra') {
+        const field = slot === 'viennoiseries' ? 'viennoiseries' : 'sauces';
+        const currentArray = day[field] || [];
+        const newArray = [...currentArray];
+        if (index !== undefined) {
+          newArray[index] = recipeId || '';
+        }
+        return {
+          ...prev,
+          [date]: {
+            ...day,
+            [field]: newArray
+          }
+        };
+      }
+      const meal = day[mealType as 'lunch' | 'dinner'] || {};
       return {
         ...prev,
         [date]: {
           ...day,
-          [mealType]: {
+          [mealType as 'lunch' | 'dinner']: {
             ...meal,
-            [slot]: recipeId
+            [slot as 'starter' | 'main' | 'dessert']: recipeId
           }
         }
       };
     });
-    const mealKey = `${date}-${mealType}-${slot}`;
+    const mealKey = mealType === 'extra' ? `${date}-${slot}-${index}` : `${date}-${mealType}-${slot}`;
     if (sentMeals.has(mealKey)) {
       const next = new Set(sentMeals);
       next.delete(mealKey);
@@ -701,13 +716,18 @@ const RecipeDetail: React.FC<{
   mealPlan: Record<string, MealPlanDay>;
   onClose: () => void; 
   onAddToShopping: (ings: Ingredient[], title: string) => void;
-  updateMealPlan: (date: string, type: 'lunch' | 'dinner', slot: 'starter' | 'main' | 'dessert', recipeId: string | undefined) => void;
+  updateMealPlan: (date: string, type: 'lunch' | 'dinner' | 'extra', slot: 'starter' | 'main' | 'dessert' | 'viennoiseries' | 'sauces', recipeId: string | undefined, index?: number) => void;
   setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
 }> = ({ recipe, recipes, mealPlan, onClose, onAddToShopping, updateMealPlan, setSentMeals }) => {
   const [servings, setServings] = useState(recipe.servings || 4);
   const [planDate, setPlanDate] = useState('');
-  const [mealType, setMealType] = useState<'lunch' | 'dinner'>('lunch');
-  const [slotType, setSlotType] = useState<'starter' | 'main' | 'dessert'>('main');
+  const [mealType, setMealType] = useState<'lunch' | 'dinner' | 'extra'>(
+    recipe.category === 'Viennoiserie' || recipe.category === 'Sauce' ? 'extra' : 'lunch'
+  );
+  const [slotType, setSlotType] = useState<'starter' | 'main' | 'dessert' | 'viennoiseries' | 'sauces'>(
+    recipe.category === 'Viennoiserie' ? 'viennoiseries' : recipe.category === 'Sauce' ? 'sauces' : 'main'
+  );
+  const [extraIndex, setExtraIndex] = useState(0);
   const [conflict, setConflict] = useState<{ existingRecipeTitle: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<'plan' | 'planAndSend' | null>(null);
   const [showAvailability, setShowAvailability] = useState(false);
@@ -720,14 +740,32 @@ const RecipeDetail: React.FC<{
   const ratio = servings / (recipe.servings || 4);
 
   useEffect(() => {
-    if (recipe.category === 'Entrée') setSlotType('starter');
-    else if (recipe.category === 'Dessert') setSlotType('dessert');
-    else setSlotType('main');
+    if (recipe.category === 'Entrée') {
+      setSlotType('starter');
+      setMealType('lunch');
+    } else if (recipe.category === 'Dessert') {
+      setSlotType('dessert');
+      setMealType('lunch');
+    } else if (recipe.category === 'Viennoiserie' || recipe.category === 'Gâteaux') {
+      setSlotType('viennoiseries');
+      setMealType('extra');
+    } else if (recipe.category === 'Sauce' || recipe.category === 'Coulis') {
+      setSlotType('sauces');
+      setMealType('extra');
+    } else {
+      setSlotType('main');
+      setMealType('lunch');
+    }
   }, [recipe.category]);
 
   const checkConflict = () => {
     if (!planDate) return false;
-    const existingId = mealPlan[planDate]?.[mealType]?.[slotType];
+    let existingId: string | undefined;
+    if (mealType === 'extra') {
+      existingId = mealPlan[planDate]?.[slotType as 'viennoiseries' | 'sauces']?.[extraIndex];
+    } else {
+      existingId = mealPlan[planDate]?.[mealType as 'lunch' | 'dinner']?.[slotType as 'starter' | 'main' | 'dessert'];
+    }
     if (existingId && existingId !== recipe.id) {
       const existing = recipes.find(r => r.id === existingId);
       setConflict({ existingRecipeTitle: existing?.title || 'Inconnue' });
@@ -737,16 +775,17 @@ const RecipeDetail: React.FC<{
   };
 
   const executePlan = () => {
-    updateMealPlan(planDate, mealType, slotType, recipe.id);
-    alert(`Recette programmée pour le ${planDate} (${mealType === 'lunch' ? 'Midi' : 'Soir'}) - ${slotType === 'starter' ? 'Entrée' : slotType === 'main' ? 'Plat' : 'Dessert'}`);
+    updateMealPlan(planDate, mealType, slotType, recipe.id, mealType === 'extra' ? extraIndex : undefined);
+    alert(`Recette programmée pour le ${planDate} (${mealType === 'lunch' ? 'Midi' : mealType === 'dinner' ? 'Soir' : 'Extra'}) - ${slotType === 'starter' ? 'Entrée' : slotType === 'main' ? 'Plat' : slotType === 'dessert' ? 'Dessert' : slotType === 'viennoiseries' ? 'Viennoiserie et Gâteau' : 'Sauce et Coulis'}`);
     setConflict(null);
     setPendingAction(null);
   };
 
   const executePlanAndSend = () => {
-    updateMealPlan(planDate, mealType, slotType, recipe.id);
+    updateMealPlan(planDate, mealType, slotType, recipe.id, mealType === 'extra' ? extraIndex : undefined);
     onAddToShopping((recipe.ingredients || []).map(i => ({ ...i, amount: i.amount * ratio })), recipe.title);
-    setSentMeals(prev => new Set(prev).add(`${planDate}-${mealType}-${slotType}`));
+    const mealKey = mealType === 'extra' ? `${planDate}-${slotType}-${extraIndex}` : `${planDate}-${mealType}-${slotType}`;
+    setSentMeals(prev => new Set(prev).add(mealKey));
     alert(`Recette planifiée et ingrédients envoyés !`);
     setConflict(null);
     setPendingAction(null);
@@ -834,13 +873,26 @@ const RecipeDetail: React.FC<{
                   <select className="p-3 border border-gray-100 rounded-2xl font-bold outline-none cursor-pointer bg-gray-50 text-xs" value={mealType} onChange={e => setMealType(e.target.value as any)}>
                     <option value="lunch">Midi</option>
                     <option value="dinner">Soir</option>
+                    <option value="extra">Extra</option>
                   </select>
                   <select className="p-3 border border-gray-100 rounded-2xl font-bold outline-none cursor-pointer bg-gray-50 text-xs" value={slotType} onChange={e => setSlotType(e.target.value as any)}>
                     <option value="starter">Entrée</option>
                     <option value="main">Plat Principal</option>
                     <option value="dessert">Dessert</option>
+                    <option value="viennoiseries">Viennoiseries et Gâteaux</option>
+                    <option value="sauces">Sauces et Coulis</option>
                   </select>
                 </div>
+                {mealType === 'extra' && (
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest ml-1">Position (1-6)</label>
+                    <select className="w-full p-3 border border-gray-100 rounded-2xl font-bold outline-none cursor-pointer bg-gray-50 text-xs" value={extraIndex} onChange={e => setExtraIndex(Number(e.target.value))}>
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <option key={i} value={i}>Emplacement #{i + 1}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
               <button 
                 onClick={handlePlan}
@@ -1679,7 +1731,7 @@ const RecurringView: React.FC<{
 const Planning: React.FC<{ 
   mealPlan: Record<string, MealPlanDay>; 
   recipes: Recipe[]; 
-  updateMealPlan: (d: string, t: 'lunch' | 'dinner', s: 'starter' | 'main' | 'dessert', r: string | undefined) => void;
+  updateMealPlan: (d: string, t: 'lunch' | 'dinner' | 'extra', s: 'starter' | 'main' | 'dessert' | 'viennoiseries' | 'sauces', r: string | undefined, index?: number) => void;
   onMergeToShopping: (items: ShoppingListItem[]) => void;
   sentMeals: Set<string>;
   setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -1735,7 +1787,6 @@ const Planning: React.FC<{
 
         (['starter', 'main', 'dessert'] as const).forEach(slot => {
           const recipeId = meal[slot];
-          // Si un repas est programmé et n'a pas encore été envoyé
           if (recipeId && !sentMeals.has(`${key}-${type}-${slot}`)) {
             const recipe = recipes.find((r: any) => r.id === recipeId);
             if (recipe) {
@@ -1753,6 +1804,30 @@ const Planning: React.FC<{
           }
         });
       });
+
+      // Extras: Viennoiseries & Sauces (only for Sunday to avoid duplicates in week)
+      if (d.getDay() === 0) {
+        (['viennoiseries', 'sauces'] as const).forEach(slot => {
+          const recipeIds = plan[slot] || [];
+          recipeIds.forEach((recipeId, index) => {
+            if (recipeId && !sentMeals.has(`${key}-${slot}-${index}`)) {
+              const recipe = recipes.find((r: any) => r.id === recipeId);
+              if (recipe) {
+                const items = recipe.ingredients.map((ing: any) => ({
+                  id: Math.random().toString(36).substr(2, 9),
+                  name: ing.name,
+                  amount: ing.amount,
+                  unit: ing.unit,
+                  checked: false
+                }));
+                allItems = [...allItems, ...items];
+                newSentMeals.add(`${key}-${slot}-${index}`);
+                addedCount++;
+              }
+            }
+          });
+        });
+      }
     });
 
     if (addedCount > 0) {
@@ -1852,6 +1927,68 @@ const Planning: React.FC<{
             </div>
           );
         })}
+        
+        {(() => {
+          const sunday = days[6];
+          const key = sunday.toISOString().split('T')[0];
+          return (
+            <>
+              {/* Viennoiserie Card */}
+              <div className="bg-white p-6 border border-pink-100 rounded-[32px] shadow-sm hover:shadow-md transition-all">
+                <p className="text-center font-black text-sm uppercase tracking-widest text-pink-500 mb-4 border-b border-pink-50 pb-2">
+                  Viennoiseries et Gâteaux
+                </p>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[8px] font-black text-pink-400 uppercase tracking-widest ml-1">#{i + 1}</span>
+                        {mealPlan[key]?.viennoiseries?.[i] && sentMeals.has(`${key}-viennoiseries-${i}`) && (
+                          <span className="text-green-500 scale-75"><EXT_ICONS.Check /></span>
+                        )}
+                      </div>
+                      <select 
+                        className={`w-full text-[10px] font-bold bg-pink-50/30 p-2 rounded-xl border transition-all ${mealPlan[key]?.viennoiseries?.[i] && sentMeals.has(`${key}-viennoiseries-${i}`) ? 'border-green-400 ring-1 ring-green-100' : 'border-transparent focus:border-pink-200'}`}
+                        value={mealPlan[key]?.viennoiseries?.[i] || ''}
+                        onChange={e => updateMealPlan(key, 'extra', 'viennoiseries', e.target.value || undefined, i)}
+                      >
+                        <option value="">Vide</option>
+                        {recipes.filter(r => r.category === 'Viennoiserie' || r.category === 'Gâteaux').map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sauce Card */}
+              <div className="bg-white p-6 border border-blue-100 rounded-[32px] shadow-sm hover:shadow-md transition-all">
+                <p className="text-center font-black text-sm uppercase tracking-widest text-blue-500 mb-4 border-b border-blue-50 pb-2">
+                  Sauces et Coulis
+                </p>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest ml-1">#{i + 1}</span>
+                        {mealPlan[key]?.sauces?.[i] && sentMeals.has(`${key}-sauces-${i}`) && (
+                          <span className="text-green-500 scale-75"><EXT_ICONS.Check /></span>
+                        )}
+                      </div>
+                      <select 
+                        className={`w-full text-[10px] font-bold bg-blue-50/30 p-2 rounded-xl border transition-all ${mealPlan[key]?.sauces?.[i] && sentMeals.has(`${key}-sauces-${i}`) ? 'border-green-400 ring-1 ring-green-100' : 'border-transparent focus:border-blue-200'}`}
+                        value={mealPlan[key]?.sauces?.[i] || ''}
+                        onChange={e => updateMealPlan(key, 'extra', 'sauces', e.target.value || undefined, i)}
+                      >
+                        <option value="">Vide</option>
+                        {recipes.filter(r => r.category === 'Sauce' || r.category === 'Coulis').map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       {/* MODAL RÉCAPITULATIF PLANNING */}
@@ -1884,7 +2021,7 @@ const Planning: React.FC<{
 
                 const hasAny = (['lunch', 'dinner'] as const).some(type => 
                   (['starter', 'main', 'dessert'] as const).some(slot => plan[type]?.[slot])
-                );
+                ) || plan.viennoiseries?.some(v => v) || plan.sauces?.some(s => s);
                 if (!hasAny) return null;
 
                 return (
@@ -1931,6 +2068,47 @@ const Planning: React.FC<{
                             </div>
                           </div>
                         );
+                      })}
+
+                      {/* Extras in Summary */}
+                      {(['viennoiseries', 'sauces'] as const).map(slot => {
+                        const recipeIds = plan[slot] || [];
+                        return recipeIds.map((recipeId, index) => {
+                          if (!recipeId) return null;
+                          const r = recipes.find(rec => rec.id === recipeId);
+                          if (!r) return null;
+
+                          return (
+                            <div key={`${slot}-${index}`} className={`flex justify-between items-center p-3 rounded-2xl border ${slot === 'viennoiseries' ? 'bg-pink-50 border-pink-100' : 'bg-blue-50 border-blue-100'}`}>
+                              <div className="flex-1 min-w-0">
+                                <span className={`text-[7px] font-black uppercase block mb-0.5 ${slot === 'viennoiseries' ? 'text-pink-400' : 'text-blue-400'}`}>{slot === 'viennoiseries' ? 'Viennoiserie et Gâteau' : 'Sauce et Coulis'} #{index + 1}</span>
+                                <span className="font-bold text-gray-700 text-sm truncate block">{r.title}</span>
+                              </div>
+                              {sentMeals.has(`${dateStr}-${slot}-${index}`) ? (
+                                <span className="bg-green-100 text-green-600 p-1.5 rounded-xl flex items-center gap-1 text-[10px] font-black shrink-0">
+                                  <EXT_ICONS.Check /> Envoyé
+                                </span>
+                              ) : (
+                                <button 
+                                  onClick={() => {
+                                    const items = r.ingredients.map(ing => ({
+                                      id: Math.random().toString(36).substr(2, 9),
+                                      name: ing.name,
+                                      amount: ing.amount,
+                                      unit: ing.unit,
+                                      checked: false
+                                    }));
+                                    onMergeToShopping(items);
+                                    setSentMeals(prev => new Set(prev).add(`${dateStr}-${slot}-${index}`));
+                                  }} 
+                                  className={`p-1.5 rounded-xl text-[10px] font-black transition-all shrink-0 ${slot === 'viennoiseries' ? 'bg-pink-100 text-pink-600 hover:bg-pink-200' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}
+                                >
+                                  Envoyer
+                                </button>
+                              )}
+                            </div>
+                          );
+                        });
                       })}
                     </div>
                   </div>
