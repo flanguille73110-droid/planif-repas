@@ -1,6 +1,5 @@
-
 {
-  "name": "Gestion Courses - Planificateur de Repas",
+  "name": "Gestion cuisine - Planificateur de Repas",
   "description": "Application de gestion de recettes, planification de repas et listes de courses avec export Excel.",
   "requestFramePermissions": [
     "camera"

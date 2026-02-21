@@ -26,10 +26,15 @@ export interface Recipe {
   tags: string[];
 }
 
+export interface MealSlot {
+  starter?: string; // recipe ID
+  main?: string;    // recipe ID
+  dessert?: string; // recipe ID
+}
+
 export interface MealPlanDay {
-  date: string; // ISO string
-  lunch?: string; // recipe ID
-  dinner?: string; // recipe ID
+  lunch?: MealSlot;
+  dinner?: MealSlot;
 }
 
 export interface ShoppingListItem {
