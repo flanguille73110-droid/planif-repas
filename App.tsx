@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Recipe, MealPlanDay, ShoppingListItem, AppTab, UserSettings, Ingredient, FoodPortion } from './types';
-import { CATEGORIES, DIETARY_OPTIONS } from './constants';
+import { CATEGORIES, DIETARY_OPTIONS, FOOD_CATEGORIES } from './constants';
 
 // Extend ICONS
 const ICONS = {
@@ -102,9 +102,52 @@ export default function App() {
     const defaultSettings: UserSettings = {
       userName: 'Utilisateur',
       dietaryRestrictions: [],
+      foodCategories: FOOD_CATEGORIES,
       foodPortions: [
-        { id: '1', name: 'Pâtes', amount: 1, unit: 'g' },
-        { id: '2', name: 'Riz', amount: 1, unit: 'g' }
+        { id: '1', name: 'Pomme', amount: 1, unit: 'g', category: 'Fruit et légumes' },
+        { id: '2', name: 'Banane', amount: 1, unit: 'g', category: 'Fruit et légumes' },
+        { id: '3', name: 'Carotte', amount: 1, unit: 'g', category: 'Fruit et légumes' },
+        { id: '4', name: 'Tomate', amount: 1, unit: 'g', category: 'Fruit et légumes' },
+        { id: '5', name: 'Poulet', amount: 1, unit: 'g', category: 'Viandes et poissons' },
+        { id: '6', name: 'Bœuf', amount: 1, unit: 'g', category: 'Viandes et poissons' },
+        { id: '7', name: 'Saumon', amount: 1, unit: 'g', category: 'Viandes et poissons' },
+        { id: '8', name: 'Colin', amount: 1, unit: 'g', category: 'Viandes et poissons' },
+        { id: '9', name: 'Jambon', amount: 1, unit: 'g', category: 'Charcuterie' },
+        { id: '10', name: 'Salami', amount: 1, unit: 'g', category: 'Charcuterie' },
+        { id: '11', name: 'Chorizo', amount: 1, unit: 'g', category: 'Charcuterie' },
+        { id: '12', name: 'Salade de pâtes', amount: 1, unit: 'g', category: 'Traiteurs' },
+        { id: '13', name: 'Quiche', amount: 1, unit: 'g', category: 'Traiteurs' },
+        { id: '14', name: 'Pizza', amount: 1, unit: 'g', category: 'Traiteurs' },
+        { id: '15', name: 'Baguette', amount: 1, unit: 'g', category: 'Pain' },
+        { id: '16', name: 'Pain de mie', amount: 1, unit: 'g', category: 'Pain' },
+        { id: '17', name: 'Pain complet', amount: 1, unit: 'g', category: 'Pain' },
+        { id: '18', name: 'Yaourt nature', amount: 1, unit: 'g', category: 'Yaourts' },
+        { id: '19', name: 'Yaourt aux fruits', amount: 1, unit: 'g', category: 'Yaourts' },
+        { id: '20', name: 'Emmental', amount: 1, unit: 'g', category: 'Fromage' },
+        { id: '21', name: 'Camembert', amount: 1, unit: 'g', category: 'Fromage' },
+        { id: '22', name: 'Chèvre', amount: 1, unit: 'g', category: 'Fromage' },
+        { id: '23', name: 'Lait', amount: 1, unit: 'g', category: 'Crèmerie et œufs' },
+        { id: '24', name: 'Beurre', amount: 1, unit: 'g', category: 'Crèmerie et œufs' },
+        { id: '25', name: 'Œufs', amount: 1, unit: 'g', category: 'Crèmerie et œufs' },
+        { id: '26', name: 'Crème fraîche', amount: 1, unit: 'g', category: 'Crèmerie et œufs' },
+        { id: '27', name: 'Frites', amount: 1, unit: 'g', category: 'Surgelés' },
+        { id: '28', name: 'Petits pois', amount: 1, unit: 'g', category: 'Surgelés' },
+        { id: '29', name: 'Glace', amount: 1, unit: 'g', category: 'Surgelés' },
+        { id: '30', name: 'Sucre', amount: 1, unit: 'g', category: 'Épicerie Sucrées' },
+        { id: '31', name: 'Chocolat', amount: 1, unit: 'g', category: 'Épicerie Sucrées' },
+        { id: '32', name: 'Biscuits', amount: 1, unit: 'g', category: 'Épicerie Sucrées' },
+        { id: '33', name: 'Farine', amount: 1, unit: 'g', category: 'Épicerie Sucrées' },
+        { id: '34', name: 'Sel', amount: 1, unit: 'g', category: 'Épicerie salées' },
+        { id: '35', name: 'Pâtes', amount: 1, unit: 'g', category: 'Épicerie salées' },
+        { id: '36', name: 'Riz', amount: 1, unit: 'g', category: 'Épicerie salées' },
+        { id: '37', name: "Huile d'olive", amount: 1, unit: 'g', category: 'Épicerie salées' },
+        { id: '38', name: 'Eau', amount: 1, unit: 'g', category: 'Boissons' },
+        { id: '39', name: "Jus d'orange", amount: 1, unit: 'g', category: 'Boissons' },
+        { id: '40', name: 'Soda', amount: 1, unit: 'g', category: 'Boissons' },
+        { id: '41', name: 'Café', amount: 1, unit: 'g', category: 'Boissons' },
+        { id: '42', name: 'Savon', amount: 1, unit: 'g', category: 'Hygiène et entretien' },
+        { id: '43', name: 'Lessive', amount: 1, unit: 'g', category: 'Hygiène et entretien' },
+        { id: '44', name: 'Papier toilette', amount: 1, unit: 'g', category: 'Hygiène et entretien' }
       ],
       servingsDefault: 1,
       language: 'fr'
@@ -148,7 +191,7 @@ export default function App() {
 
   const deleteRecipe = (id: string) => setRecipes(prev => prev.filter(r => r.id !== id));
   
-  const updateMealPlan = (date: string, mealType: 'lunch' | 'dinner' | 'extra', slot: 'starter' | 'main' | 'dessert' | 'viennoiseries' | 'sauces', recipeId: string | undefined, index?: number) => {
+  const updateMealPlan = (date: string, mealType: 'lunch' | 'dinner' | 'extra', slot: 'recipe1' | 'recipe2' | 'viennoiseries' | 'sauces', recipeId: string | undefined, index?: number) => {
     setMealPlan(prev => {
       const day = prev[date] || {};
       if (mealType === 'extra') {
@@ -173,7 +216,7 @@ export default function App() {
           ...day,
           [mealType as 'lunch' | 'dinner']: {
             ...meal,
-            [slot as 'starter' | 'main' | 'dessert']: recipeId
+            [slot as 'recipe1' | 'recipe2']: recipeId
           }
         }
       };
@@ -277,6 +320,14 @@ export default function App() {
     const wsReserve = XLSX.utils.json_to_sheet(reserveData);
     XLSX.utils.book_append_sheet(workbook, wsReserve, "reserves");
 
+    // Sheet 3: Aliments
+    const foodData = (settings.foodPortions || []).map(item => ({
+      Aliment: item.name,
+      Catégorie: item.category || "Sans catégorie"
+    }));
+    const wsFood = XLSX.utils.json_to_sheet(foodData);
+    XLSX.utils.book_append_sheet(workbook, wsFood, "Aliments");
+
     XLSX.writeFile(workbook, "culinashare_stocks.xlsx");
   };
 
@@ -347,6 +398,36 @@ export default function App() {
               }
             });
             return updatedReserve.sort((a, b) => a.name.localeCompare(b.name));
+          });
+        }
+
+        // Process Aliments
+        if (wb.SheetNames.includes("Aliments")) {
+          const ws = wb.Sheets["Aliments"];
+          const data = XLSX.utils.sheet_to_json(ws) as any[];
+          
+          setSettings(prev => {
+            const updatedFoodPortions = [...(prev.foodPortions || [])];
+            data.forEach(row => {
+              const foodName = (row.Aliment || row.aliment || row.ALIMENT || "").toString().trim();
+              const category = (row.Catégorie || row.catégorie || row.CATEGORIE || "").toString().trim();
+              if (!foodName) return;
+              
+              const exists = updatedFoodPortions.find(f => f.name.toLowerCase() === foodName.toLowerCase());
+              if (!exists) {
+                updatedFoodPortions.push({
+                  id: Math.random().toString(36).substr(2, 9),
+                  name: foodName,
+                  amount: 1,
+                  unit: 'g',
+                  category: category === "Sans catégorie" ? undefined : category
+                });
+              } else if (category && category !== "Sans catégorie") {
+                // Update category if it exists but was empty or different
+                exists.category = category;
+              }
+            });
+            return { ...prev, foodPortions: updatedFoodPortions };
           });
         }
 
@@ -563,15 +644,17 @@ const InStockView: React.FC<{
               value={newItemUnit} 
               onChange={e => setNewItemUnit(e.target.value)}
             >
-              <option value="unité">u.</option>
+              <option value="boite">boite</option>
+              <option value="C.à S">C.à S</option>
+              <option value="cl">cl</option>
               <option value="g">g</option>
               <option value="kg">kg</option>
-              <option value="ml">ml</option>
               <option value="L">L</option>
-              <option value="pièce">pc.</option>
+              <option value="ml">ml</option>
               <option value="paquet">paq.</option>
+              <option value="pièce">pc.</option>
               <option value="tranche">tr.</option>
-              <option value="C.à S">C.à S</option>
+              <option value="unité">u.</option>
             </select>
           </div>
           <button 
@@ -623,7 +706,7 @@ const RecipeBook: React.FC<{
   onAddToShopping: (ings: Ingredient[], title: string) => void;
   foodPortions: FoodPortion[];
   onAddFoodToSettings: (name: string, unit: string) => void;
-  updateMealPlan: (date: string, type: 'lunch' | 'dinner', slot: 'starter' | 'main' | 'dessert', recipeId: string | undefined) => void;
+  updateMealPlan: (date: string, type: 'lunch' | 'dinner' | 'extra', slot: 'recipe1' | 'recipe2' | 'viennoiseries' | 'sauces', recipeId: string | undefined, index?: number) => void;
   setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
 }> = ({ recipes, mealPlan, addRecipe, deleteRecipe, onAddToShopping, foodPortions, onAddFoodToSettings, updateMealPlan, setSentMeals }) => {
   const [filter, setFilter] = useState('');
@@ -716,7 +799,7 @@ const RecipeDetail: React.FC<{
   mealPlan: Record<string, MealPlanDay>;
   onClose: () => void; 
   onAddToShopping: (ings: Ingredient[], title: string) => void;
-  updateMealPlan: (date: string, type: 'lunch' | 'dinner' | 'extra', slot: 'starter' | 'main' | 'dessert' | 'viennoiseries' | 'sauces', recipeId: string | undefined, index?: number) => void;
+  updateMealPlan: (date: string, type: 'lunch' | 'dinner' | 'extra', slot: 'recipe1' | 'recipe2' | 'viennoiseries' | 'sauces', recipeId: string | undefined, index?: number) => void;
   setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
 }> = ({ recipe, recipes, mealPlan, onClose, onAddToShopping, updateMealPlan, setSentMeals }) => {
   const [servings, setServings] = useState(recipe.servings || 4);
@@ -724,8 +807,8 @@ const RecipeDetail: React.FC<{
   const [mealType, setMealType] = useState<'lunch' | 'dinner' | 'extra'>(
     recipe.category === 'Viennoiserie' || recipe.category === 'Sauce' ? 'extra' : 'lunch'
   );
-  const [slotType, setSlotType] = useState<'starter' | 'main' | 'dessert' | 'viennoiseries' | 'sauces'>(
-    recipe.category === 'Viennoiserie' ? 'viennoiseries' : recipe.category === 'Sauce' ? 'sauces' : 'main'
+  const [slotType, setSlotType] = useState<'recipe1' | 'recipe2' | 'viennoiseries' | 'sauces'>(
+    recipe.category === 'Viennoiserie' ? 'viennoiseries' : recipe.category === 'Sauce' ? 'sauces' : 'recipe1'
   );
   const [extraIndex, setExtraIndex] = useState(0);
   const [conflict, setConflict] = useState<{ existingRecipeTitle: string } | null>(null);
@@ -734,26 +817,21 @@ const RecipeDetail: React.FC<{
   const [availabilityWeekDate, setAvailabilityWeekDate] = useState(() => {
     const d = new Date();
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    // Start on Saturday (6). If today is Sat(6), diff=0. If Sun(0), diff=-1. If Mon(1), diff=-2...
+    const diff = d.getDate() - (day === 6 ? 0 : day + 1);
     return new Date(d.setDate(diff));
   });
   const ratio = servings / (recipe.servings || 4);
 
   useEffect(() => {
-    if (recipe.category === 'Entrée') {
-      setSlotType('starter');
-      setMealType('lunch');
-    } else if (recipe.category === 'Dessert') {
-      setSlotType('dessert');
-      setMealType('lunch');
-    } else if (recipe.category === 'Viennoiserie' || recipe.category === 'Gâteaux') {
+    if (recipe.category === 'Viennoiserie' || recipe.category === 'Gâteaux') {
       setSlotType('viennoiseries');
       setMealType('extra');
     } else if (recipe.category === 'Sauce' || recipe.category === 'Coulis') {
       setSlotType('sauces');
       setMealType('extra');
     } else {
-      setSlotType('main');
+      setSlotType('recipe1');
       setMealType('lunch');
     }
   }, [recipe.category]);
@@ -764,7 +842,7 @@ const RecipeDetail: React.FC<{
     if (mealType === 'extra') {
       existingId = mealPlan[planDate]?.[slotType as 'viennoiseries' | 'sauces']?.[extraIndex];
     } else {
-      existingId = mealPlan[planDate]?.[mealType as 'lunch' | 'dinner']?.[slotType as 'starter' | 'main' | 'dessert'];
+      existingId = mealPlan[planDate]?.[mealType as 'lunch' | 'dinner']?.[slotType as 'recipe1' | 'recipe2'];
     }
     if (existingId && existingId !== recipe.id) {
       const existing = recipes.find(r => r.id === existingId);
@@ -776,7 +854,7 @@ const RecipeDetail: React.FC<{
 
   const executePlan = () => {
     updateMealPlan(planDate, mealType, slotType, recipe.id, mealType === 'extra' ? extraIndex : undefined);
-    alert(`Recette programmée pour le ${planDate} (${mealType === 'lunch' ? 'Midi' : mealType === 'dinner' ? 'Soir' : 'Extra'}) - ${slotType === 'starter' ? 'Entrée' : slotType === 'main' ? 'Plat' : slotType === 'dessert' ? 'Dessert' : slotType === 'viennoiseries' ? 'Viennoiserie et Gâteau' : 'Sauce et Coulis'}`);
+    alert(`Recette programmée pour le ${planDate} (${mealType === 'lunch' ? 'Midi' : mealType === 'dinner' ? 'Soir' : 'Extra'}) - ${slotType === 'recipe1' ? 'Recette 1' : slotType === 'recipe2' ? 'Recette 2' : slotType === 'viennoiseries' ? 'Viennoiserie et Gâteau' : 'Sauce et Coulis'}`);
     setConflict(null);
     setPendingAction(null);
   };
@@ -876,9 +954,8 @@ const RecipeDetail: React.FC<{
                     <option value="extra">Extra</option>
                   </select>
                   <select className="p-3 border border-gray-100 rounded-2xl font-bold outline-none cursor-pointer bg-gray-50 text-xs" value={slotType} onChange={e => setSlotType(e.target.value as any)}>
-                    <option value="starter">Entrée</option>
-                    <option value="main">Plat Principal</option>
-                    <option value="dessert">Dessert</option>
+                    <option value="recipe1">Recette 1</option>
+                    <option value="recipe2">Recette 2</option>
                     <option value="viennoiseries">Viennoiseries et Gâteaux</option>
                     <option value="sauces">Sauces et Coulis</option>
                   </select>
@@ -887,7 +964,7 @@ const RecipeDetail: React.FC<{
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest ml-1">Position (1-6)</label>
                     <select className="w-full p-3 border border-gray-100 rounded-2xl font-bold outline-none cursor-pointer bg-gray-50 text-xs" value={extraIndex} onChange={e => setExtraIndex(Number(e.target.value))}>
-                      {Array.from({ length: 6 }).map((_, i) => (
+                      {Array.from({ length: 4 }).map((_, i) => (
                         <option key={i} value={i}>Emplacement #{i + 1}</option>
                       ))}
                     </select>
@@ -952,14 +1029,14 @@ const RecipeDetail: React.FC<{
 
       {showAvailability && (
         <div className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 md:p-10 animate-fadeIn">
-          <div className="bg-white rounded-[40px] w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-slideUp">
+          <div className="bg-white rounded-[40px] w-full max-w-[95vw] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-slideUp">
             <div className="p-8 border-b flex justify-between items-center bg-pink-50/30">
               <div>
                 <h3 className="text-2xl font-black text-gray-800 flex items-center gap-2">
                   <span className="text-pink-500">💗</span> Disponibilités de la semaine
                 </h3>
                 <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-widest">
-                  {recipe.title} • {slotType === 'starter' ? 'Entrée' : slotType === 'main' ? 'Plat' : 'Dessert'}
+                  {recipe.title} • {slotType === 'recipe1' ? 'Recette 1' : slotType === 'recipe2' ? 'Recette 2' : slotType === 'viennoiseries' ? 'Viennoiserie et Gâteau' : 'Sauce et Coulis'}
                 </p>
               </div>
               <button onClick={() => setShowAvailability(false)} className="p-4 bg-white rounded-full shadow-sm hover:bg-gray-50 transition-all font-black text-xl">×</button>
@@ -992,7 +1069,7 @@ const RecipeDetail: React.FC<{
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
                 {Array.from({ length: 7 }, (_, i) => {
                   const d = new Date(availabilityWeekDate);
                   d.setDate(availabilityWeekDate.getDate() + i);
@@ -1003,31 +1080,34 @@ const RecipeDetail: React.FC<{
                       <p className="text-[10px] font-black text-center uppercase tracking-widest text-gray-400 border-b border-gray-100 pb-2">
                         {d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })}
                       </p>
-                      {(['lunch', 'dinner'] as const).map(type => {
-                        const existingId = mealPlan[dateStr]?.[type]?.[slotType];
-                        const isOccupied = !!existingId;
-                        const isCurrentRecipe = existingId === recipe.id;
+                      {(['lunch', 'dinner'] as const).map(type => 
+                        (['recipe1', 'recipe2'] as const).map(slot => {
+                          const existingId = mealPlan[dateStr]?.[type]?.[slot];
+                          const isOccupied = !!existingId;
+                          const isCurrentRecipe = existingId === recipe.id;
 
-                        return (
-                          <button
-                            key={type}
-                            disabled={isOccupied && !isCurrentRecipe}
-                            onClick={() => {
-                              if (isCurrentRecipe) return;
-                              updateMealPlan(dateStr, type, slotType, recipe.id);
-                              setShowAvailability(false);
-                            }}
-                            className={`w-full p-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border flex flex-col items-center gap-1
-                              ${isCurrentRecipe ? 'bg-green-100 border-green-200 text-green-600 cursor-default' : 
-                                isOccupied ? 'bg-gray-100 border-gray-200 text-gray-300 cursor-not-allowed opacity-50' : 
-                                'bg-white border-pink-100 text-pink-500 hover:bg-pink-50 hover:scale-[1.02] shadow-sm'}
-                            `}
-                          >
-                            <span>{type === 'lunch' ? 'Midi' : 'Soir'}</span>
-                            {isCurrentRecipe ? 'Déjà ici' : isOccupied ? 'Occupé' : 'Disponible'}
-                          </button>
-                        );
-                      })}
+                          return (
+                            <button
+                              key={`${type}-${slot}`}
+                              disabled={isOccupied && !isCurrentRecipe}
+                              onClick={() => {
+                                if (isCurrentRecipe) return;
+                                updateMealPlan(dateStr, type, slot, recipe.id);
+                                setShowAvailability(false);
+                              }}
+                              className={`w-full p-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border flex flex-col items-center gap-1
+                                ${isCurrentRecipe ? 'bg-green-100 border-green-200 text-green-600 cursor-default' : 
+                                  isOccupied ? 'bg-gray-100 border-gray-200 text-gray-300 cursor-not-allowed opacity-50' : 
+                                  type === 'lunch' ? 'bg-white border-pink-100 text-pink-500 hover:bg-pink-50 hover:scale-[1.02] shadow-sm' :
+                                  'bg-white border-purple-100 text-purple-600 hover:bg-purple-50 hover:scale-[1.02] shadow-sm'}
+                              `}
+                            >
+                              <span>{type === 'lunch' ? 'Midi' : 'Soir'} {slot === 'recipe1' ? '1' : '2'}</span>
+                              {isCurrentRecipe ? 'Déjà ici' : isOccupied ? 'Occupé' : 'Disponible'}
+                            </button>
+                          );
+                        })
+                      )}
                     </div>
                   );
                 })}
@@ -1039,7 +1119,7 @@ const RecipeDetail: React.FC<{
                   dj.setDate(availabilityWeekDate.getDate() + j);
                   const djStr = dj.toISOString().split('T')[0];
                   const plan = mealPlan[djStr];
-                  return (plan?.lunch?.[slotType] === recipe.id || plan?.dinner?.[slotType] === recipe.id);
+                  return (plan?.lunch?.recipe1 === recipe.id || plan?.lunch?.recipe2 === recipe.id || plan?.dinner?.recipe1 === recipe.id || plan?.dinner?.recipe2 === recipe.id);
                 }).some(v => v);
 
                 return isAlreadyInWeek && (
@@ -1210,13 +1290,15 @@ const RecipeForm: React.FC<{
                 value={pendingIng.unit} 
                 onChange={e => setPendingIng({ ...pendingIng, unit: e.target.value })}
               >
-                <option value="unité">u.</option>
+                <option value="boite">boite</option>
+                <option value="C.à C">C.à C</option>
+                <option value="C.à S">C.à S</option>
+                <option value="cl">cl</option>
                 <option value="g">g</option>
                 <option value="kg">kg</option>
-                <option value="ml">ml</option>
                 <option value="L">L</option>
-                <option value="C.à S">C.à S</option>
-                <option value="C.à C">C.à C</option>
+                <option value="ml">ml</option>
+                <option value="unité">u.</option>
               </select>
               <div className="col-span-6 relative">
                 <input 
@@ -1290,7 +1372,7 @@ const RecipeSearch: React.FC<{
   mealPlan: Record<string, MealPlanDay>;
   addRecipe: (r: Recipe) => void;
   onAddToShopping: (ings: Ingredient[], title: string) => void;
-  updateMealPlan: (date: string, type: 'lunch' | 'dinner', slot: 'starter' | 'main' | 'dessert', recipeId: string | undefined) => void;
+  updateMealPlan: (date: string, type: 'lunch' | 'dinner' | 'extra', slot: 'recipe1' | 'recipe2' | 'viennoiseries' | 'sauces', recipeId: string | undefined, index?: number) => void;
   foodPortions: FoodPortion[];
   setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
 }> = ({ recipes, mealPlan, addRecipe, onAddToShopping, updateMealPlan, foodPortions, setSentMeals }) => {
@@ -1586,12 +1668,14 @@ const RecurringView: React.FC<{
                      value={newItemUnit}
                      onChange={e => setNewItemUnit(e.target.value)}
                    >
-                     <option value="unité">u.</option>
+                     <option value="boite">boite</option>
+                     <option value="C.à S">C.à S</option>
+                     <option value="cl">cl</option>
                      <option value="g">g</option>
                      <option value="kg">kg</option>
-                     <option value="ml">ml</option>
                      <option value="L">L</option>
-                     <option value="C.à S">C.à S</option>
+                     <option value="ml">ml</option>
+                     <option value="unité">u.</option>
                    </select>
                 </div>
                 <button onClick={addTempItem} className="sm:col-span-2 bg-purple-600 text-white p-4 rounded-2xl font-black shadow-lg shadow-purple-100 active:scale-95 transition-all">Ajouter</button>
@@ -1731,7 +1815,7 @@ const RecurringView: React.FC<{
 const Planning: React.FC<{ 
   mealPlan: Record<string, MealPlanDay>; 
   recipes: Recipe[]; 
-  updateMealPlan: (d: string, t: 'lunch' | 'dinner' | 'extra', s: 'starter' | 'main' | 'dessert' | 'viennoiseries' | 'sauces', r: string | undefined, index?: number) => void;
+  updateMealPlan: (d: string, t: 'lunch' | 'dinner' | 'extra', s: 'recipe1' | 'recipe2' | 'viennoiseries' | 'sauces', r: string | undefined, index?: number) => void;
   onMergeToShopping: (items: ShoppingListItem[]) => void;
   sentMeals: Set<string>;
   setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -1741,7 +1825,8 @@ const Planning: React.FC<{
   const [baseDate, setBaseDate] = useState(() => {
     const d = new Date();
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    // Start on Saturday (6)
+    const diff = d.getDate() - (day === 6 ? 0 : day + 1);
     return new Date(d.setDate(diff));
   });
 
@@ -1751,7 +1836,11 @@ const Planning: React.FC<{
     return d;
   });
 
-  const handleSendRecipe = (date: string, type: 'lunch' | 'dinner', slot: 'starter' | 'main' | 'dessert', recipeId: string) => {
+  const sortedRecipes = useMemo(() => {
+    return [...recipes].sort((a, b) => a.title.localeCompare(b.title));
+  }, [recipes]);
+
+  const handleSendRecipe = (date: string, type: 'lunch' | 'dinner', slot: 'recipe1' | 'recipe2', recipeId: string) => {
     const recipe = recipes.find(r => r.id === recipeId);
     if (!recipe) return;
     
@@ -1785,7 +1874,7 @@ const Planning: React.FC<{
         const meal = plan[type];
         if (!meal) return;
 
-        (['starter', 'main', 'dessert'] as const).forEach(slot => {
+        (['recipe1', 'recipe2'] as const).forEach(slot => {
           const recipeId = meal[slot];
           if (recipeId && !sentMeals.has(`${key}-${type}-${slot}`)) {
             const recipe = recipes.find((r: any) => r.id === recipeId);
@@ -1892,11 +1981,11 @@ const Planning: React.FC<{
                       {type === 'lunch' ? 'Déjeuner' : 'Dîner'}
                     </label>
                     <div className="space-y-2 pl-2 border-l-2 border-purple-100">
-                      {(['starter', 'main', 'dessert'] as const).map(slot => (
+                      {(['recipe1', 'recipe2'] as const).map((slot, idx) => (
                         <div key={slot} className="space-y-1">
                           <div className="flex justify-between items-center">
                             <span className="text-[8px] font-black text-purple-400 uppercase tracking-widest ml-1">
-                              {slot === 'starter' ? 'Entrée' : slot === 'main' ? 'Plat' : 'Dessert'}
+                              Recette {idx + 1}
                             </span>
                             {mealPlan[key]?.[type]?.[slot] && sentMeals.has(`${key}-${type}-${slot}`) && (
                               <span className="text-green-500 scale-75"><EXT_ICONS.Check /></span>
@@ -1908,15 +1997,7 @@ const Planning: React.FC<{
                             onChange={e => updateMealPlan(key, type, slot, e.target.value || undefined)}
                           >
                             <option value="">Vide</option>
-                            {recipes
-                              .filter(r => {
-                                if (slot === 'starter') return r.category === 'Entrée';
-                                if (slot === 'main') return r.category === 'Plat Principal' || r.category === 'Snack';
-                                if (slot === 'dessert') return r.category === 'Dessert';
-                                return true;
-                              })
-                              .map(r => <option key={r.id} value={r.id}>{r.title}</option>)
-                            }
+                            {sortedRecipes.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
                           </select>
                         </div>
                       ))}
@@ -1939,7 +2020,7 @@ const Planning: React.FC<{
                   Viennoiseries et Gâteaux
                 </p>
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                  {Array.from({ length: 6 }).map((_, i) => (
+                  {Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className="space-y-1">
                       <div className="flex justify-between items-center">
                         <span className="text-[8px] font-black text-pink-400 uppercase tracking-widest ml-1">#{i + 1}</span>
@@ -1953,7 +2034,7 @@ const Planning: React.FC<{
                         onChange={e => updateMealPlan(key, 'extra', 'viennoiseries', e.target.value || undefined, i)}
                       >
                         <option value="">Vide</option>
-                        {recipes.filter(r => r.category === 'Viennoiserie' || r.category === 'Gâteaux').map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+                        {sortedRecipes.filter(r => r.category === 'Viennoiserie' || r.category === 'Gâteaux').map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
                       </select>
                     </div>
                   ))}
@@ -1966,7 +2047,7 @@ const Planning: React.FC<{
                   Sauces et Coulis
                 </p>
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                  {Array.from({ length: 6 }).map((_, i) => (
+                  {Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className="space-y-1">
                       <div className="flex justify-between items-center">
                         <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest ml-1">#{i + 1}</span>
@@ -1980,7 +2061,7 @@ const Planning: React.FC<{
                         onChange={e => updateMealPlan(key, 'extra', 'sauces', e.target.value || undefined, i)}
                       >
                         <option value="">Vide</option>
-                        {recipes.filter(r => r.category === 'Sauce' || r.category === 'Coulis').map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+                        {sortedRecipes.filter(r => r.category === 'Sauce' || r.category === 'Coulis').map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
                       </select>
                     </div>
                   ))}
@@ -2020,7 +2101,7 @@ const Planning: React.FC<{
                 if (!plan) return null;
 
                 const hasAny = (['lunch', 'dinner'] as const).some(type => 
-                  (['starter', 'main', 'dessert'] as const).some(slot => plan[type]?.[slot])
+                  (['recipe1', 'recipe2'] as const).some(slot => plan[type]?.[slot])
                 ) || plan.viennoiseries?.some(v => v) || plan.sauces?.some(s => s);
                 if (!hasAny) return null;
 
@@ -2031,14 +2112,14 @@ const Planning: React.FC<{
                       {(['lunch', 'dinner'] as const).map(type => {
                         const meal = plan[type];
                         if (!meal) return null;
-                        const hasMeal = (['starter', 'main', 'dessert'] as const).some(slot => meal[slot]);
+                        const hasMeal = (['recipe1', 'recipe2'] as const).some(slot => meal[slot]);
                         if (!hasMeal) return null;
 
                         return (
                           <div key={type} className="space-y-2">
                             <span className="text-[8px] font-black uppercase text-gray-400 block ml-2">{type === 'lunch' ? 'Midi' : 'Soir'}</span>
                             <div className="space-y-2">
-                              {(['starter', 'main', 'dessert'] as const).map(slot => {
+                              {(['recipe1', 'recipe2'] as const).map((slot, idx) => {
                                 const recipeId = meal[slot];
                                 if (!recipeId) return null;
                                 const r = recipes.find(rec => rec.id === recipeId);
@@ -2047,7 +2128,7 @@ const Planning: React.FC<{
                                 return (
                                   <div key={slot} className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl border border-gray-100">
                                     <div className="flex-1 min-w-0">
-                                      <span className="text-[7px] font-black uppercase text-purple-400 block mb-0.5">{slot === 'starter' ? 'Entrée' : slot === 'main' ? 'Plat' : 'Dessert'}</span>
+                                      <span className="text-[7px] font-black uppercase text-purple-400 block mb-0.5">Recette {idx + 1}</span>
                                       <span className="font-bold text-gray-700 text-sm truncate block">{r.title}</span>
                                     </div>
                                     {sentMeals.has(`${dateStr}-${type}-${slot}`) ? (
@@ -2208,6 +2289,17 @@ const ShoppingView: React.FC<{
     setCheckedSummaryItems(next);
   };
 
+  const groupedConsolidatedList = useMemo(() => {
+    const groups: Record<string, ShoppingListItem[]> = {};
+    consolidatedList.forEach(item => {
+      const portion = foodPortions.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+      const cat = portion?.category || 'Autres';
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(item);
+    });
+    return groups;
+  }, [consolidatedList, foodPortions]);
+
   return (
     <div className={`mx-auto space-y-8 animate-fadeIn pb-32 px-2 relative transition-all duration-300 ${showReserveOnSide ? 'max-w-5xl' : 'max-w-2xl'}`}>
       <div className="sticky top-0 z-30 bg-purple-50/95 backdrop-blur-sm py-4 -mx-2 px-4 sm:px-2">
@@ -2256,15 +2348,17 @@ const ShoppingView: React.FC<{
           <div className="flex gap-2">
             <input type="number" className="w-20 p-3.5 border border-gray-100 rounded-2xl bg-gray-50 font-black text-center text-purple-600 outline-none" value={newItemAmount} onChange={e => setNewItemAmount(Number(e.target.value))} />
             <select className="w-24 p-3.5 border border-gray-100 rounded-2xl bg-gray-50 font-bold text-gray-500 outline-none cursor-pointer" value={newItemUnit} onChange={e => setNewItemUnit(e.target.value)}>
-              <option value="unité">u.</option>
+              <option value="boite">boite</option>
+              <option value="C.à C">C.à C</option>
+              <option value="C.à S">C.à S</option>
+              <option value="cl">cl</option>
               <option value="g">g</option>
               <option value="kg">kg</option>
-              <option value="ml">ml</option>
               <option value="L">L</option>
+              <option value="ml">ml</option>
               <option value="pièce">pc.</option>
               <option value="tranche">tr.</option>
-              <option value="C.à S">C.à S</option>
-              <option value="C.à C">C.à C</option>
+              <option value="unité">u.</option>
             </select>
             <button onClick={handleAddItem} className="bg-purple-600 text-white p-3.5 rounded-2xl font-black shadow-lg shadow-purple-100 active:scale-95 transition-all"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" /></svg></button>
           </div>
@@ -2353,16 +2447,45 @@ const ShoppingView: React.FC<{
                <button onClick={() => setShowSummary(false)} className="p-4 bg-gray-100 rounded-full hover:bg-gray-200 transition-all">×</button>
              </header>
 
-             <div className="bg-white rounded-[40px] border border-gray-100 divide-y divide-gray-50 overflow-hidden shadow-sm">
-                {(consolidatedList || []).map(item => (
-                  <div key={item.id} className="p-6 flex items-center transition-all">
-                    <div onClick={() => toggleSummaryCheck(item.id)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer mr-5 shrink-0 ${checkedSummaryItems.has(item.id) ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
-                       {checkedSummaryItems.has(item.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
+             <div className="space-y-8">
+                {(settings.foodCategories || FOOD_CATEGORIES).map(cat => {
+                  const items = groupedConsolidatedList[cat];
+                  if (!items || items.length === 0) return null;
+                  return (
+                    <div key={cat} className="space-y-4">
+                      <h3 className="text-sm font-black text-purple-600 uppercase tracking-widest border-b border-purple-100 pb-2 px-2">{cat}</h3>
+                      <div className="bg-white rounded-[40px] border border-gray-100 divide-y divide-gray-50 overflow-hidden shadow-sm">
+                        {items.map(item => (
+                          <div key={item.id} className="p-6 flex items-center transition-all">
+                            <div onClick={() => toggleSummaryCheck(item.id)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer mr-5 shrink-0 ${checkedSummaryItems.has(item.id) ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
+                               {checkedSummaryItems.has(item.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
+                            </div>
+                            <span className={`flex-1 font-bold text-xl ${checkedSummaryItems.has(item.id) ? 'line-through text-gray-300' : 'text-gray-800'}`}>{item.name}</span>
+                            <span className={`font-black text-purple-600 bg-purple-50 px-4 py-1.5 rounded-2xl text-sm ${checkedSummaryItems.has(item.id) ? 'opacity-50' : ''}`}>{item.amount} {item.unit}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <span className={`flex-1 font-bold text-xl ${checkedSummaryItems.has(item.id) ? 'line-through text-gray-300' : 'text-gray-800'}`}>{item.name}</span>
-                    <span className={`font-black text-purple-600 bg-purple-50 px-4 py-1.5 rounded-2xl text-sm ${checkedSummaryItems.has(item.id) ? 'opacity-50' : ''}`}>{item.amount} {item.unit}</span>
+                  );
+                })}
+
+                {/* Autres catégories */}
+                {groupedConsolidatedList['Autres'] && groupedConsolidatedList['Autres'].length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2 px-2">Autres</h3>
+                    <div className="bg-white rounded-[40px] border border-gray-100 divide-y divide-gray-50 overflow-hidden shadow-sm">
+                      {groupedConsolidatedList['Autres'].map(item => (
+                        <div key={item.id} className="p-6 flex items-center transition-all">
+                          <div onClick={() => toggleSummaryCheck(item.id)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer mr-5 shrink-0 ${checkedSummaryItems.has(item.id) ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
+                             {checkedSummaryItems.has(item.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
+                          </div>
+                          <span className={`flex-1 font-bold text-xl ${checkedSummaryItems.has(item.id) ? 'line-through text-gray-300' : 'text-gray-800'}`}>{item.name}</span>
+                          <span className={`font-black text-purple-600 bg-purple-50 px-4 py-1.5 rounded-2xl text-sm ${checkedSummaryItems.has(item.id) ? 'opacity-50' : ''}`}>{item.amount} {item.unit}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                )}
              </div>
 
              <div className="pt-8 space-y-4">
@@ -2373,7 +2496,7 @@ const ShoppingView: React.FC<{
                   }} 
                   className="w-full bg-green-600 text-white p-6 rounded-3xl font-black shadow-xl shadow-green-100 hover:scale-[1.02] active:scale-95 transition-all"
                 >
-                  🚀 Valider & Vider la liste
+                  🚀 Vider la liste
                 </button>
                 <button 
                   onClick={() => setShowSummary(false)} 
@@ -2424,8 +2547,16 @@ const Settings: React.FC<{
 }> = ({ settings, setSettings, exportToJSON, importFromJSON, exportToExcel, importFromExcel }) => {
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [newFoodName, setNewFoodName] = useState('');
+  const [newFoodCategory, setNewFoodCategory] = useState<string>('none');
+  const [newCategoryFoodNames, setNewCategoryFoodNames] = useState<Record<string, string>>({});
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [expandedUncategorized, setExpandedUncategorized] = useState(false);
+
+  const currentCategories = settings.foodCategories || FOOD_CATEGORIES;
 
   const toggleSection = (id: string) => setActiveSection(activeSection === id ? null : id);
 
@@ -2441,6 +2572,58 @@ const Settings: React.FC<{
       foodPortions: (prev.foodPortions || []).map(f => f.id === id ? { ...f, name: editingName.trim() } : f)
     }));
     setEditingFoodId(null);
+  };
+
+  const startEditCategory = (cat: string) => {
+    setEditingCategoryId(cat);
+    setEditingCategoryName(cat);
+  };
+
+  const saveCategoryName = (oldName: string) => {
+    const newName = editingCategoryName.trim();
+    if (!newName || newName === oldName) {
+      setEditingCategoryId(null);
+      return;
+    }
+
+    setSettings(prev => {
+      const updatedCategories = (prev.foodCategories || FOOD_CATEGORIES).map(c => c === oldName ? newName : c);
+      const updatedPortions = (prev.foodPortions || []).map(p => p.category === oldName ? { ...p, category: newName } : p);
+      return { ...prev, foodCategories: updatedCategories, foodPortions: updatedPortions };
+    });
+    setEditingCategoryId(null);
+  };
+
+  const assignCategory = (foodId: string, category: string) => {
+    setSettings(prev => ({
+      ...prev,
+      foodPortions: (prev.foodPortions || []).map(f => f.id === foodId ? { ...f, category: category === 'none' ? undefined : category } : f)
+    }));
+  };
+
+  const toggleCategoryExpand = (cat: string) => {
+    const next = new Set(expandedCategories);
+    if (next.has(cat)) next.delete(cat);
+    else next.add(cat);
+    setExpandedCategories(next);
+  };
+
+  const addFoodToCategory = (category: string) => {
+    const name = newCategoryFoodNames[category]?.trim();
+    if (!name) return;
+    
+    setSettings(prev => ({
+      ...prev,
+      foodPortions: [...(prev.foodPortions || []), { 
+        id: Math.random().toString(36).substr(2, 9), 
+        name, 
+        amount: 1, 
+        unit: 'g',
+        category 
+      }]
+    }));
+    
+    setNewCategoryFoodNames(prev => ({ ...prev, [category]: '' }));
   };
 
   return (
@@ -2462,46 +2645,180 @@ const Settings: React.FC<{
           </button>
           
           {activeSection === 'food' && (
-            <div className="p-8 bg-gray-50/50 border-t border-gray-100 space-y-8 animate-slideDown">
-              <div className="flex flex-col sm:flex-row gap-4 bg-white p-6 rounded-3xl border border-purple-100">
-                <input className="flex-1 p-4 border border-gray-100 rounded-2xl bg-gray-50 font-bold outline-none" placeholder="Nom..." value={newFoodName} onChange={e => setNewFoodName(e.target.value)} />
+            <div className="p-8 bg-gray-50/50 border-t border-gray-100 space-y-12 animate-slideDown">
+              {/* Main Aliments List (Uncategorized) */}
+              <div className="space-y-6">
                 <button 
-                  onClick={() => {
-                    if(!newFoodName.trim()) return;
-                    setSettings({ ...settings, foodPortions: [...(settings.foodPortions || []), { id: Math.random().toString(36).substr(2, 9), name: newFoodName.trim(), amount: 1, unit: 'g' }] });
-                    setNewFoodName('');
-                  }} 
-                  className="bg-purple-600 text-white px-8 rounded-2xl font-black shadow-lg"
+                  onClick={() => setExpandedUncategorized(!expandedUncategorized)}
+                  className="w-full flex items-center justify-between text-sm font-black text-gray-400 uppercase tracking-widest border-b pb-2 hover:text-gray-600 transition-colors"
                 >
-                  Ajouter
+                  <span>Aliments sans catégorie</span>
+                  <svg className={`w-4 h-4 transition-transform ${expandedUncategorized ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
                 </button>
+                
+                {expandedUncategorized && (
+                  <div className="space-y-6 animate-slideDown">
+                    <div className="flex flex-col sm:flex-row gap-4 bg-white p-6 rounded-3xl border border-purple-100">
+                      <input className="flex-1 p-4 border border-gray-100 rounded-2xl bg-gray-50 font-bold outline-none" placeholder="Nom..." value={newFoodName} onChange={e => setNewFoodName(e.target.value)} />
+                      <select 
+                        className="p-4 border border-gray-100 rounded-2xl bg-gray-50 font-bold outline-none focus:border-purple-200"
+                        value={newFoodCategory}
+                        onChange={e => setNewFoodCategory(e.target.value)}
+                      >
+                        <option value="none">Sans catégorie</option>
+                        {currentCategories.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <button 
+                        onClick={() => {
+                          if(!newFoodName.trim()) return;
+                          setSettings({ ...settings, foodPortions: [...(settings.foodPortions || []), { 
+                            id: Math.random().toString(36).substr(2, 9), 
+                            name: newFoodName.trim(), 
+                            amount: 1, 
+                            unit: 'g',
+                            category: newFoodCategory === 'none' ? undefined : newFoodCategory
+                          }] });
+                          setNewFoodName('');
+                          setNewFoodCategory('none');
+                        }} 
+                        className="bg-purple-600 text-white px-8 rounded-2xl font-black shadow-lg"
+                      >
+                        Ajouter
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {(settings.foodPortions || [])
+                        .filter(p => !p.category)
+                        .sort((a,b) => a.name.localeCompare(b.name))
+                        .map(p => (
+                        <div key={p.id} className="flex flex-col gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
+                          <div className="flex items-center gap-4">
+                            {editingFoodId === p.id ? (
+                              <div className="flex-1 flex gap-2">
+                                <input 
+                                  className="flex-1 p-2 border border-purple-200 rounded-lg outline-none font-bold text-gray-700 bg-purple-50"
+                                  value={editingName}
+                                  onChange={e => setEditingName(e.target.value)}
+                                  onKeyPress={e => e.key === 'Enter' && saveFoodName(p.id)}
+                                  autoFocus
+                                />
+                                <button onClick={() => saveFoodName(p.id)} className="bg-green-500 text-white p-2 rounded-lg"><EXT_ICONS.Check /></button>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="flex-1 font-bold text-gray-700">{p.name}</span>
+                                <div className="flex gap-2">
+                                  <button onClick={() => startEditFood(p)} className="text-gray-300 hover:text-purple-600 transition-colors p-2" title="Modifier"><EXT_ICONS.Edit /></button>
+                                  <button onClick={() => setSettings({ ...settings, foodPortions: (settings.foodPortions || []).filter(x => x.id !== p.id) })} className="text-red-400 font-bold text-xl hover:scale-110 transition-transform p-2">×</button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Catégorie :</span>
+                            <select 
+                              className="flex-1 p-2 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold text-gray-600 outline-none focus:border-purple-200"
+                              value="none"
+                              onChange={(e) => assignCategory(p.id, e.target.value)}
+                            >
+                              <option value="none">Sélectionner...</option>
+                              {currentCategories.map(c => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(settings.foodPortions || []).slice().sort((a,b) => a.name.localeCompare(b.name)).map(p => (
-                  <div key={p.id} className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
-                    {editingFoodId === p.id ? (
-                      <div className="flex-1 flex gap-2">
+
+              {/* Categorized Lists */}
+              {currentCategories.map(cat => (
+                <div key={cat} className="space-y-6">
+                  <div className="flex items-center justify-between border-b border-purple-100 pb-2">
+                    {editingCategoryId === cat ? (
+                      <div className="flex items-center gap-2 flex-1 max-w-md">
                         <input 
-                          className="flex-1 p-2 border border-purple-200 rounded-lg outline-none font-bold text-gray-700 bg-purple-50"
-                          value={editingName}
-                          onChange={e => setEditingName(e.target.value)}
-                          onKeyPress={e => e.key === 'Enter' && saveFoodName(p.id)}
+                          className="flex-1 p-2 border border-purple-200 rounded-lg outline-none font-bold text-purple-700 bg-purple-50"
+                          value={editingCategoryName}
+                          onChange={e => setEditingCategoryName(e.target.value)}
+                          onKeyPress={e => e.key === 'Enter' && saveCategoryName(cat)}
                           autoFocus
                         />
-                        <button onClick={() => saveFoodName(p.id)} className="bg-green-500 text-white p-2 rounded-lg"><EXT_ICONS.Check /></button>
+                        <button onClick={() => saveCategoryName(cat)} className="bg-green-500 text-white p-2 rounded-lg"><EXT_ICONS.Check /></button>
                       </div>
                     ) : (
-                      <>
-                        <span className="flex-1 font-bold text-gray-700">{p.name}</span>
-                        <div className="flex gap-2">
-                          <button onClick={() => startEditFood(p)} className="text-gray-300 hover:text-purple-600 transition-colors p-2" title="Modifier"><EXT_ICONS.Edit /></button>
-                          <button onClick={() => setSettings({ ...settings, foodPortions: (settings.foodPortions || []).filter(x => x.id !== p.id) })} className="text-red-400 font-bold text-xl hover:scale-110 transition-transform p-2">×</button>
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-3">
+                          <h4 className="text-sm font-black text-purple-600 uppercase tracking-widest">{cat}</h4>
+                          <button onClick={() => startEditCategory(cat)} className="text-gray-300 hover:text-purple-600 transition-colors" title="Modifier le nom de la catégorie">
+                            <EXT_ICONS.Edit />
+                          </button>
                         </div>
-                      </>
+                        <button 
+                          onClick={() => toggleCategoryExpand(cat)}
+                          className="text-purple-300 hover:text-purple-600 transition-colors p-2"
+                        >
+                          <svg className={`w-5 h-5 transition-transform ${expandedCategories.has(cat) ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                      </div>
                     )}
                   </div>
-                ))}
-              </div>
+                  
+                  {expandedCategories.has(cat) && (
+                    <div className="space-y-6 animate-slideDown">
+                      <div className="flex flex-col sm:flex-row gap-4 bg-white p-6 rounded-3xl border border-purple-100">
+                        <input 
+                          className="flex-1 p-4 border border-gray-100 rounded-2xl bg-gray-50 font-bold outline-none" 
+                          placeholder={`Ajouter dans ${cat}...`} 
+                          value={newCategoryFoodNames[cat] || ''} 
+                          onChange={e => setNewCategoryFoodNames(prev => ({ ...prev, [cat]: e.target.value }))} 
+                          onKeyPress={e => e.key === 'Enter' && addFoodToCategory(cat)}
+                        />
+                        <button 
+                          onClick={() => addFoodToCategory(cat)} 
+                          className="bg-purple-600 text-white px-8 rounded-2xl font-black shadow-lg"
+                        >
+                          Ajouter
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {(settings.foodPortions || [])
+                          .filter(p => p.category === cat)
+                          .sort((a,b) => a.name.localeCompare(b.name))
+                          .map(p => (
+                          <div key={p.id} className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
+                            {editingFoodId === p.id ? (
+                              <div className="flex-1 flex gap-2">
+                                <input 
+                                  className="flex-1 p-2 border border-purple-200 rounded-lg outline-none font-bold text-gray-700 bg-purple-50"
+                                  value={editingName}
+                                  onChange={e => setEditingName(e.target.value)}
+                                  onKeyPress={e => e.key === 'Enter' && saveFoodName(p.id)}
+                                  autoFocus
+                                />
+                                <button onClick={() => saveFoodName(p.id)} className="bg-green-500 text-white p-2 rounded-lg"><EXT_ICONS.Check /></button>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="flex-1 font-bold text-gray-700">{p.name}</span>
+                                <div className="flex gap-2">
+                                  <button onClick={() => startEditFood(p)} className="text-gray-300 hover:text-purple-600 transition-colors p-2" title="Modifier"><EXT_ICONS.Edit /></button>
+                                  <button onClick={() => setSettings({ ...settings, foodPortions: (settings.foodPortions || []).filter(x => x.id !== p.id) })} className="text-red-400 font-bold text-xl hover:scale-110 transition-transform p-2">×</button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -2532,7 +2849,7 @@ const Settings: React.FC<{
 
               <p className="text-xs font-black text-green-600 uppercase tracking-widest border-b pb-2 mt-6">Stocks & Listes (Excel)</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <button onClick={exportToExcel} className="bg-green-600 text-white p-6 rounded-3xl font-black shadow-lg shadow-green-100 hover:scale-[1.02] transition-all">Exporter Excel (Récurrents + Réserve)</button>
+                <button onClick={exportToExcel} className="bg-green-600 text-white p-6 rounded-3xl font-black shadow-lg shadow-green-100 hover:scale-[1.02] transition-all">Exporter Excel (Récurrents + Réserve + Aliments)</button>
                 <label className="bg-white text-green-600 p-6 rounded-3xl font-black border-2 border-dashed border-green-100 cursor-pointer hover:bg-green-50 transition-all text-center">
                   Importer Excel
                   <input type="file" accept=".xlsx, .xls" className="hidden" onChange={importFromExcel} />

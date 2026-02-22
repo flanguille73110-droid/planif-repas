@@ -10,6 +10,7 @@ export interface FoodPortion {
   name: string;
   amount: number;
   unit: string;
+  category?: string;
 }
 
 export interface Recipe {
@@ -27,9 +28,8 @@ export interface Recipe {
 }
 
 export interface MealSlot {
-  starter?: string; // recipe ID
-  main?: string;    // recipe ID
-  dessert?: string; // recipe ID
+  recipe1?: string; // recipe ID
+  recipe2?: string; // recipe ID
 }
 
 export interface MealPlanDay {
@@ -54,6 +54,7 @@ export interface UserSettings {
   userName: string;
   dietaryRestrictions: string[];
   foodPortions: FoodPortion[];
+  foodCategories?: string[];
   servingsDefault: number;
   language: string;
 }

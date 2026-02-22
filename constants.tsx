@@ -12,6 +12,22 @@ export const CATEGORIES = [
   'Coulis'
 ];
 
+export const FOOD_CATEGORIES = [
+  'Fruit et légumes',
+  'Viandes et poissons',
+  'Charcuterie',
+  'Traiteurs',
+  'Pain',
+  'Yaourts',
+  'Fromage',
+  'Crèmerie et œufs',
+  'Surgelés',
+  'Épicerie Sucrées',
+  'Épicerie salées',
+  'Boissons',
+  'Hygiène et entretien'
+];
+
 export const DIETARY_OPTIONS = [
   'Végétarien',
   'Végétalien',
