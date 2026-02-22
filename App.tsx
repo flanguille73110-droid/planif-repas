@@ -1158,17 +1158,59 @@ const RecipeForm: React.FC<{
   const [tm7Checked, setTm7Checked] = useState(initialData?.tags?.includes('TM7') || false);
   const [pendingIng, setPendingIng] = useState<Ingredient>({ name: '', amount: 1, unit: 'g' });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showNewFoodModal, setShowNewFoodModal] = useState(false);
+  const [newFoodCategory, setNewFoodCategory] = useState('Épicerie');
+
+  const normalizeString = (str: string) => {
+    return str
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/œ/g, "oe")
+      .trim();
+  };
 
   const totalTime = (formData.prepTime || 0) + (formData.cookTime || 0);
 
+  const capitalizeFirstLetter = (str: string) => {
+    if (!str) return str;
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  };
+
   const addPendingIngredient = () => {
-    if (!pendingIng.name.trim()) return;
+    const trimmedName = pendingIng.name.trim();
+    if (!trimmedName) return;
+
+    const finalName = capitalizeFirstLetter(trimmedName);
+    const ingredientToAdd = { ...pendingIng, name: finalName };
+    
+    const normalizedInput = normalizeString(finalName);
+    const existing = foodPortions.find(fp => normalizeString(fp.name) === normalizedInput);
+
+    if (!existing) {
+      setPendingIng(ingredientToAdd); // Update pendingIng with capitalized name before showing modal
+      setShowNewFoodModal(true);
+      return;
+    }
+
+    onAddFoodToSettings(finalName, pendingIng.unit);
+    setFormData(prev => ({
+      ...prev,
+      ingredients: [...(prev.ingredients || []), ingredientToAdd]
+    }));
+    setPendingIng({ name: '', amount: 1, unit: 'g' });
+  };
+
+  const confirmNewFood = () => {
     onAddFoodToSettings(pendingIng.name, pendingIng.unit);
+    // Note: In a real app, we'd pass the category to onAddFoodToSettings
+    // For now we follow the existing pattern while adding to the recipe
     setFormData(prev => ({
       ...prev,
       ingredients: [...(prev.ingredients || []), { ...pendingIng }]
     }));
     setPendingIng({ name: '', amount: 1, unit: 'g' });
+    setShowNewFoodModal(false);
   };
 
   const removeIngredient = (index: number) => {
@@ -1217,6 +1259,36 @@ const RecipeForm: React.FC<{
                 className="flex-1 p-4 bg-red-500 text-white rounded-2xl font-black shadow-lg shadow-red-100 active:scale-95 transition-all"
               >
                 Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showNewFoodModal && (
+        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white rounded-[40px] p-8 max-w-sm w-full shadow-2xl space-y-6 text-center animate-slideUp">
+            <div className="w-16 h-16 bg-purple-50 text-purple-500 rounded-full flex items-center justify-center mx-auto mb-2 text-2xl">✨</div>
+            <h3 className="text-xl font-black text-gray-800">Nouvel Aliment</h3>
+            <p className="text-gray-500 font-medium">
+              L'aliment <span className="text-purple-600 font-bold">"{pendingIng.name}"</span> est nouveau. Dans quelle catégorie souhaitez-vous le classer ?
+            </p>
+            <select 
+              className="w-full p-4 border border-gray-100 rounded-2xl bg-gray-50 font-bold outline-none cursor-pointer"
+              value={newFoodCategory}
+              onChange={e => setNewFoodCategory(e.target.value)}
+            >
+              {['Légumes', 'Fruits', 'Viandes', 'Poissons', 'Épicerie', 'Frais', 'Surgelés', 'Boissons', 'Boulangerie', 'Hygiène'].map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setShowNewFoodModal(false)} className="flex-1 p-4 bg-gray-100 text-gray-500 rounded-2xl font-black active:scale-95 transition-all">Annuler</button>
+              <button 
+                onClick={confirmNewFood} 
+                className="flex-1 p-4 bg-purple-600 text-white rounded-2xl font-black shadow-lg shadow-purple-100 active:scale-95 transition-all"
+              >
+                Ajouter
               </button>
             </div>
           </div>
@@ -1310,7 +1382,11 @@ const RecipeForm: React.FC<{
                   onKeyPress={e => e.key === 'Enter' && addPendingIngredient()}
                 />
                 <datalist id="recipe-food-suggestions">
-                  {(foodPortions || []).map(fp => <option key={fp.id} value={fp.name} />)}
+                  {(foodPortions || []).filter(fp => {
+                    const search = normalizeString(pendingIng.name);
+                    if (!search) return true;
+                    return normalizeString(fp.name).includes(search);
+                  }).map(fp => <option key={fp.id} value={fp.name} />)}
                 </datalist>
               </div>
               <button onClick={addPendingIngredient} className="col-span-12 mt-3 bg-purple-600 text-white p-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-purple-100 active:scale-95 transition-all">Ajouter à la liste</button>
@@ -1944,26 +2020,30 @@ const Planning: React.FC<{
 
   return (
     <div className="space-y-8 animate-fadeIn relative pb-20">
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
+      <header className="grid grid-cols-3 items-center gap-4 py-4">
+        <div className="flex items-center gap-4 bg-purple-50 p-2 rounded-2xl border border-purple-100">
+          <button onClick={() => changeWeek(-1)} className="p-2 hover:bg-purple-100 rounded-xl transition-all text-purple-600">
+            <EXT_ICONS.ArrowLeft />
+          </button>
+          <span className="text-xs font-black uppercase tracking-widest text-purple-600 min-w-[180px] text-center">
+            {formatWeekRange(baseDate)}
+          </span>
+          <button onClick={() => changeWeek(1)} className="p-2 hover:bg-purple-100 rounded-xl transition-all text-purple-600">
+            <EXT_ICONS.ArrowRight />
+          </button>
+        </div>
+        <div className="text-center">
           <h2 className="text-3xl font-black text-gray-800 tracking-tight">Mon Planning</h2>
-          <div className="flex items-center gap-4 mt-2 bg-purple-50 p-2 rounded-2xl border border-purple-100">
-            <button onClick={() => changeWeek(-1)} className="p-2 hover:bg-purple-100 rounded-xl transition-all text-purple-600">
-              <EXT_ICONS.ArrowLeft />
-            </button>
-            <span className="text-xs font-black uppercase tracking-widest text-purple-600 min-w-[180px] text-center">
-              {formatWeekRange(baseDate)}
-            </span>
-            <button onClick={() => changeWeek(1)} className="p-2 hover:bg-purple-100 rounded-xl transition-all text-purple-600">
-              <EXT_ICONS.ArrowRight />
-            </button>
-          </div>
+          <p className="font-bold text-purple-400 text-sm mt-1">
+            {new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
         </div>
         <button 
           onClick={() => setShowSummary(true)} 
-          className="bg-purple-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-purple-100 w-full sm:w-auto"
+          className="bg-gradient-to-br from-purple-500 to-indigo-500 text-white p-4 rounded-2xl font-black shadow-lg shadow-purple-100 hover:shadow-xl transition-all flex items-center gap-2 active:scale-95 justify-self-end"
         >
-          Générer Courses
+          <EXT_ICONS.Cart />
+          <span>Générer Courses</span>
         </button>
       </header>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
