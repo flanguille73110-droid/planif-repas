@@ -1,5 +1,6 @@
+import { SearchableSelect } from './src/components/SearchableSelect';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Recipe, MealPlanDay, ShoppingListItem, AppTab, UserSettings, Ingredient, FoodPortion } from './types';
+import { Recipe, MealPlanDay, ShoppingListItem, AppTab, UserSettings, Ingredient, FoodPortion } from './src/types';
 import { CATEGORIES, DIETARY_OPTIONS, FOOD_CATEGORIES } from './constants';
 
 // Extend ICONS
@@ -101,6 +102,7 @@ export default function App() {
     const saved = localStorage.getItem('culina_settings');
     const defaultSettings: UserSettings = {
       userName: 'Utilisateur',
+      servings: 4,
       dietaryRestrictions: [],
       foodCategories: FOOD_CATEGORIES,
       foodPortions: [
@@ -246,7 +248,7 @@ export default function App() {
     });
   }, []);
 
-  const handleQuickAddFoodToSettings = (name: string, unit: string = 'g') => {
+  const handleQuickAddFoodToSettings = (name: string, unit: string = 'g', category: string = 'Épicerie') => {
     setSettings(prev => {
       const portions = prev.foodPortions || [];
       const exists = portions.some(p => p.name.toLowerCase() === name.toLowerCase().trim());
@@ -255,7 +257,8 @@ export default function App() {
         id: Math.random().toString(36).substr(2, 9),
         name: name.trim(),
         amount: 1,
-        unit: unit
+        unit: unit,
+        category: category
       };
       return { ...prev, foodPortions: [...portions, newPortion] };
     });
@@ -461,6 +464,7 @@ export default function App() {
               mergeToShoppingList(items);
             }} 
             foodPortions={settings.foodPortions} 
+            foodCategories={settings.foodCategories || ['Légumes', 'Fruits', 'Viandes', 'Poissons', 'Épicerie', 'Frais', 'Surgelés', 'Boissons', 'Boulangerie', 'Hygiène', 'Autre']}
             onAddFoodToSettings={handleQuickAddFoodToSettings}
             updateMealPlan={updateMealPlan}
             setSentMeals={setSentMeals}
@@ -522,6 +526,7 @@ export default function App() {
             setList={setShoppingList} 
             settings={settings}
             foodPortions={settings.foodPortions || []}
+            foodCategories={settings.foodCategories || ['Légumes', 'Fruits', 'Viandes', 'Poissons', 'Épicerie', 'Frais', 'Surgelés', 'Boissons', 'Boulangerie', 'Hygiène', 'Autre']}
             onAddFoodToSettings={handleQuickAddFoodToSettings}
             reserveItems={reserveItems}
             setReserveItems={setReserveItems}
@@ -574,7 +579,7 @@ const InStockView: React.FC<{
   items: ShoppingListItem[];
   setItems: React.Dispatch<React.SetStateAction<ShoppingListItem[]>>;
   foodPortions: FoodPortion[];
-  onAddFoodToSettings: (name: string, unit: string) => void;
+  onAddFoodToSettings: (name: string, unit: string, category: string) => void;
 }> = ({ items, setItems, foodPortions, onAddFoodToSettings }) => {
   const [newItemName, setNewItemName] = useState('');
   const [newItemAmount, setNewItemAmount] = useState(1);
@@ -582,7 +587,7 @@ const InStockView: React.FC<{
 
   const addItem = () => {
     if (!newItemName.trim()) return;
-    onAddFoodToSettings(newItemName.trim(), newItemUnit);
+    onAddFoodToSettings(newItemName.trim(), newItemUnit, 'Épicerie');
     const item: ShoppingListItem = {
       id: Math.random().toString(36).substr(2, 9),
       name: newItemName.trim(),
@@ -705,10 +710,11 @@ const RecipeBook: React.FC<{
   deleteRecipe: (id: string) => void;
   onAddToShopping: (ings: Ingredient[], title: string) => void;
   foodPortions: FoodPortion[];
-  onAddFoodToSettings: (name: string, unit: string) => void;
+  foodCategories: string[];
+  onAddFoodToSettings: (name: string, unit: string, category: string) => void;
   updateMealPlan: (date: string, type: 'lunch' | 'dinner' | 'extra', slot: 'recipe1' | 'recipe2' | 'viennoiseries' | 'sauces', recipeId: string | undefined, index?: number) => void;
   setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
-}> = ({ recipes, mealPlan, addRecipe, deleteRecipe, onAddToShopping, foodPortions, onAddFoodToSettings, updateMealPlan, setSentMeals }) => {
+}> = ({ recipes, mealPlan, addRecipe, deleteRecipe, onAddToShopping, foodPortions, foodCategories, onAddFoodToSettings, updateMealPlan, setSentMeals }) => {
   const [filter, setFilter] = useState('');
   const [selectedCat, setSelectedCat] = useState('Tous');
   const [isAdding, setIsAdding] = useState(false);
@@ -734,6 +740,7 @@ const RecipeBook: React.FC<{
       foodPortions={foodPortions} 
       onAddFoodToSettings={onAddFoodToSettings}
       initialData={editingRecipe || undefined}
+      foodCategories={foodCategories}
     />
   );
 
@@ -979,11 +986,12 @@ const RecipeDetail: React.FC<{
               </button>
             </div>
 
-            <div className="flex items-center gap-4 bg-purple-50 p-4 rounded-3xl">
-              <span className="font-black text-sm text-purple-600">Portions :</span>
+            <div className="flex items-center gap-2 bg-purple-50 p-2 rounded-2xl">
+              <span className="font-black text-xs text-purple-600 pl-2">Portions :</span>
               <button onClick={() => setServings(s => Math.max(1, s - 1))} className="w-8 h-8 bg-white rounded-lg font-black">-</button>
               <span className="font-black w-8 text-center">{servings}</span>
-              <button onClick={() => setServings(s => s + 1)} className="w-8 h-8 bg-white rounded-lg font-black">+</button>
+              <button onClick={() => setServings(s => Math.min(s + 1, recipe.maxServings || recipe.servings))} className="w-8 h-8 bg-white rounded-lg font-black">+</button>
+              <span className="font-black text-xs text-purple-400 pr-2">/ 👥 Pers Max {recipe.maxServings || recipe.servings}</span>
             </div>
 
             <div className="space-y-3">
@@ -1141,9 +1149,10 @@ const RecipeForm: React.FC<{
   onDelete?: (id: string) => void;
   onCancel: () => void;
   foodPortions: FoodPortion[];
-  onAddFoodToSettings: (name: string, unit: string) => void;
+  onAddFoodToSettings: (name: string, unit: string, category: string) => void;
   initialData?: Recipe;
-}> = ({ onSave, onDelete, onCancel, foodPortions, onAddFoodToSettings, initialData }) => {
+  foodCategories: string[];
+}> = ({ onSave, onDelete, onCancel, foodPortions, onAddFoodToSettings, initialData, foodCategories }) => {
   const [formData, setFormData] = useState<Partial<Recipe>>(initialData || { 
     title: '', 
     servings: 4, 
@@ -1159,7 +1168,7 @@ const RecipeForm: React.FC<{
   const [pendingIng, setPendingIng] = useState<Ingredient>({ name: '', amount: 1, unit: 'g' });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showNewFoodModal, setShowNewFoodModal] = useState(false);
-  const [newFoodCategory, setNewFoodCategory] = useState('Épicerie');
+  const [newFoodCategory, setNewFoodCategory] = useState<string>(foodCategories[0] || 'Épicerie');
 
   const normalizeString = (str: string) => {
     return str
@@ -1202,9 +1211,7 @@ const RecipeForm: React.FC<{
   };
 
   const confirmNewFood = () => {
-    onAddFoodToSettings(pendingIng.name, pendingIng.unit);
-    // Note: In a real app, we'd pass the category to onAddFoodToSettings
-    // For now we follow the existing pattern while adding to the recipe
+    onAddFoodToSettings(pendingIng.name, pendingIng.unit, newFoodCategory);
     setFormData(prev => ({
       ...prev,
       ingredients: [...(prev.ingredients || []), { ...pendingIng }]
@@ -1278,7 +1285,7 @@ const RecipeForm: React.FC<{
               value={newFoodCategory}
               onChange={e => setNewFoodCategory(e.target.value)}
             >
-              {['Légumes', 'Fruits', 'Viandes', 'Poissons', 'Épicerie', 'Frais', 'Surgelés', 'Boissons', 'Boulangerie', 'Hygiène'].map(cat => (
+              {foodCategories.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
@@ -1320,29 +1327,43 @@ const RecipeForm: React.FC<{
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">⏲️ Préparation (min)</label>
-              <input type="number" className="w-full p-4 border border-gray-100 rounded-2xl bg-gray-50 font-black text-purple-600 outline-none" value={formData.prepTime} onChange={e => setFormData({ ...formData, prepTime: Number(e.target.value) })} />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">👥 Pour (pers.)</label>
+                <input type="number" className="w-full p-4 border border-gray-100 rounded-2xl bg-gray-50 font-black text-purple-600 outline-none" value={formData.servings} onChange={e => {
+                  const newServings = Number(e.target.value);
+                  if (formData.maxServings && newServings > formData.maxServings) {
+                    setFormData({ ...formData, servings: formData.maxServings })
+                  } else {
+                    setFormData({ ...formData, servings: newServings })
+                  }
+                }} />
+              </div>
+              {tm7Checked && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">👥 Pers max</label>
+                  <input type="number" className="w-full p-4 border border-gray-100 rounded-2xl bg-gray-50 font-black text-purple-600 outline-none" value={formData.maxServings} onChange={e => setFormData({ ...formData, maxServings: Number(e.target.value) })} />
+                </div>
+              )}
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">🔥 Cuisson (min)</label>
-              <input type="number" className="w-full p-4 border border-gray-100 rounded-2xl bg-gray-50 font-black text-purple-600 outline-none" value={formData.cookTime} onChange={e => setFormData({ ...formData, cookTime: Number(e.target.value) })} />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">⏲️ Préparation (min)</label>
+                <input type="number" className="w-full p-4 border border-gray-100 rounded-2xl bg-gray-50 font-black text-purple-600 outline-none" value={formData.prepTime} onChange={e => setFormData({ ...formData, prepTime: Number(e.target.value) })} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">🔥 Cuisson (min)</label>
+                <input type="number" className="w-full p-4 border border-gray-100 rounded-2xl bg-gray-50 font-black text-purple-600 outline-none" value={formData.cookTime} onChange={e => setFormData({ ...formData, cookTime: Number(e.target.value) })} />
+              </div>
+            </div>
+
+            <div className="space-y-2 text-center">
               <label className="text-[10px] font-black text-green-400 uppercase tracking-widest ml-2">⌛ Temps Total</label>
               <div className="w-full p-4 border border-green-50 rounded-2xl bg-green-50 font-black text-green-600 flex items-center justify-center">
                 {formatTotalTime(totalTime)}
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">👥 Pour (pers.)</label>
-              <input type="number" className="w-full p-4 border border-gray-100 rounded-2xl bg-gray-50 font-black text-purple-600 outline-none" value={formData.servings} onChange={e => setFormData({ ...formData, servings: Number(e.target.value) })} />
-            </div>
-          </div>
         </div>
 
         <div className="space-y-6">
@@ -1393,7 +1414,7 @@ const RecipeForm: React.FC<{
             </div>
           </div>
           
-          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar border-t border-gray-50 pt-4">
+          <div className="space-y-2 border-t border-gray-50 pt-4">
             {(formData.ingredients || []).length === 0 ? (
               <p className="text-center text-xs text-gray-300 italic py-10">Aucun aliment ajouté</p>
             ) : (
@@ -1555,7 +1576,7 @@ const RecurringView: React.FC<{
   groups: PantryGroup[]; 
   setGroups: React.Dispatch<React.SetStateAction<PantryGroup[]>>;
   foodPortions: FoodPortion[];
-  onAddFoodToSettings: (name: string, unit: string) => void;
+  onAddFoodToSettings: (name: string, unit: string, category: string) => void;
   onSendToShopping: (items: ShoppingListItem[]) => void;
 }> = ({ groups, setGroups, foodPortions, onAddFoodToSettings, onSendToShopping }) => {
   const [isAddingList, setIsAddingList] = useState(false);
@@ -1572,7 +1593,7 @@ const RecurringView: React.FC<{
 
   const addTempItem = () => {
     if (!newItemName.trim()) return;
-    onAddFoodToSettings(newItemName.trim(), newItemUnit);
+    onAddFoodToSettings(newItemName.trim(), newItemUnit, 'Épicerie');
     const item: ShoppingListItem = {
       id: Math.random().toString(36).substr(2, 9),
       name: newItemName.trim(),
@@ -1794,14 +1815,14 @@ const RecurringView: React.FC<{
                   <div className="flex items-center gap-3">
                     <h3 className="text-xl font-black text-gray-800 uppercase tracking-tight">{group.name}</h3>
                     <span className="text-xs font-black bg-white px-2 py-1 rounded-lg text-purple-600 border border-purple-100 shadow-sm">
-                      {group.items.filter(i => !i.checked).length}/{group.items.length}
+                      {group.items.filter(i => i.checked).length}/{group.items.length}
                     </span>
                   </div>
                   <div className="flex gap-2">
                     <button 
-                      onClick={() => onSendToShopping(group.items.filter(i => !i.checked))}
+                      onClick={() => onSendToShopping(group.items.filter(i => i.checked))}
                       className="text-purple-600 p-2 hover:bg-purple-100 rounded-xl transition-all"
-                      title="Envoyer les articles non cochés aux courses"
+                      title="Envoyer les articles cochés aux courses"
                     >
                       <EXT_ICONS.Cart />
                     </button>
@@ -1849,10 +1870,10 @@ const RecurringView: React.FC<{
                </div>
                <div className="p-4 bg-gray-50 mt-auto">
                  <button 
-                   onClick={() => onSendToShopping(group.items.filter(i => !i.checked))}
+                   onClick={() => onSendToShopping(group.items.filter(i => i.checked))}
                    className="w-full bg-purple-600 text-white py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-sm flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all"
                  >
-                   🚀 Envoyer aux courses ({group.items.filter(i => !i.checked).length})
+                   🚀 Envoyer aux courses ({group.items.filter(i => i.checked).length})
                  </button>
                </div>
             </div>
@@ -2071,14 +2092,12 @@ const Planning: React.FC<{
                               <span className="text-green-500 scale-75"><EXT_ICONS.Check /></span>
                             )}
                           </div>
-                          <select 
-                            className={`w-full text-[10px] font-bold bg-gray-50 p-2 rounded-xl border transition-all ${mealPlan[key]?.[type]?.[slot] && sentMeals.has(`${key}-${type}-${slot}`) ? 'border-green-400 ring-1 ring-green-100' : 'border-transparent focus:border-purple-200'}`}
+                          <SearchableSelect
+                            options={sortedRecipes}
                             value={mealPlan[key]?.[type]?.[slot] || ''}
-                            onChange={e => updateMealPlan(key, type, slot, e.target.value || undefined)}
-                          >
-                            <option value="">Vide</option>
-                            {sortedRecipes.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
-                          </select>
+                            onChange={value => updateMealPlan(key, type, slot, value || undefined)}
+                            placeholder="Vide"
+                          />
                         </div>
                       ))}
                     </div>
@@ -2294,7 +2313,7 @@ const ShoppingView: React.FC<{
   setList: React.Dispatch<React.SetStateAction<ShoppingListItem[]>>; 
   settings: UserSettings;
   foodPortions: FoodPortion[];
-  onAddFoodToSettings: (name: string, unit: string) => void;
+  onAddFoodToSettings: (name: string, unit: string, category: string) => void;
   reserveItems: ShoppingListItem[];
   setReserveItems: React.Dispatch<React.SetStateAction<ShoppingListItem[]>>;
 }> = ({ list, setList, settings, foodPortions, onAddFoodToSettings, reserveItems, setReserveItems }) => {
@@ -2323,7 +2342,7 @@ const ShoppingView: React.FC<{
     const name = newItemName.trim();
     const unit = newItemUnit;
 
-    onAddFoodToSettings(name, unit);
+    onAddFoodToSettings(name, unit, 'Épicerie');
 
     const item: ShoppingListItem = {
       id: Math.random().toString(36).substr(2, 9),
