@@ -16,6 +16,7 @@ const EXT_ICONS = {
   ...ICONS,
   Recurring: () => <span>🔄</span>,
   Box: () => <span>📦</span>,
+  Info: () => <span>ℹ️</span>,
   Edit: () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -293,6 +294,29 @@ export default function App() {
     reader.readAsText(file);
   };
 
+  const exportPlanningToJSON = () => {
+    const blob = new Blob([JSON.stringify(mealPlan)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `culinashare_planning.json`;
+    a.click();
+  };
+
+  const importPlanningFromJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = JSON.parse(evt.target?.result as string);
+        setMealPlan(data);
+        alert("Planning importé avec succès !");
+      } catch (err) { alert("Erreur lors de l'importation du planning."); }
+    };
+    reader.readAsText(file);
+  };
+
   const exportToExcel = () => {
     const XLSX = (window as any).XLSX;
     if (!XLSX) {
@@ -540,7 +564,14 @@ export default function App() {
             importFromJSON={importFromJSON} 
             exportToExcel={exportToExcel}
             importFromExcel={importFromExcel}
+            exportPlanningToJSON={exportPlanningToJSON}
+            importPlanningFromJSON={importPlanningFromJSON}
+            sentMeals={sentMeals}
+            setSentMeals={setSentMeals}
           />
+        )}
+        {activeTab === 'notice' && (
+          <Notice />
         )}
       </main>
     </div>
@@ -558,6 +589,7 @@ const Navbar: React.FC<{ activeTab: AppTab; setActiveTab: (t: AppTab) => void }>
     { id: 'reserve', label: "En réserve", icon: <EXT_ICONS.Box /> },
     { id: 'shopping', label: 'Courses', icon: <EXT_ICONS.Cart /> },
     { id: 'settings', label: 'Réglages', icon: <EXT_ICONS.Settings /> },
+    { id: 'notice', label: 'Notice', icon: <EXT_ICONS.Info /> },
   ];
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-2 md:sticky md:top-0 md:h-screen md:flex-col md:w-64 md:border-t-0 md:bg-purple-100/50 md:p-4 z-50 overflow-x-auto no-scrollbar">
@@ -2404,7 +2436,7 @@ const ShoppingView: React.FC<{
       <div className="sticky top-0 z-30 bg-purple-50/95 backdrop-blur-sm py-4 -mx-2 px-4 sm:px-2">
         <div className="flex justify-between items-end">
           <div>
-            <h2 className="text-3xl font-black text-gray-800 tracking-tight">Gestion Courses</h2>
+            <h2 className="text-3xl font-black text-gray-800 tracking-tight">Liste de courses</h2>
             <p className="text-sm font-bold text-purple-400 mt-1 uppercase tracking-widest">
               {(list || []).filter(i => !i.checked).length}/{(list || []).length} articles en attente
             </p>
@@ -2527,7 +2559,7 @@ const ShoppingView: React.FC<{
       {(list || []).length > 0 && !showSummary && (
         <div className="fixed bottom-24 left-0 right-0 p-6 md:relative md:bottom-0 md:p-0 flex justify-center z-40">
           <button onClick={() => { setCheckedSummaryItems(new Set()); setShowSummary(true); }} className="w-full md:w-auto bg-green-600 text-white px-12 py-5 rounded-[24px] font-black shadow-2xl shadow-green-100 hover:scale-105 transition-all active:scale-95">
-             🚀 Consolider & Finaliser
+             🚀 Valider la Pré liste
           </button>
         </div>
       )}
@@ -2538,7 +2570,7 @@ const ShoppingView: React.FC<{
           <div className="max-w-2xl mx-auto space-y-10 pb-24">
              <header className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm pt-4 pb-8 flex justify-between items-center border-b -mx-6 px-6">
                <div>
-                 <h2 className="text-4xl font-black text-gray-900 tracking-tight">Récapitulatif</h2>
+                 <h2 className="text-4xl font-black text-gray-900 tracking-tight">Liste de courses finale</h2>
                  <p className="text-sm font-bold text-green-600 mt-1 uppercase tracking-widest">
                    {checkedSummaryItems.size}/{consolidatedList.length} articles validés
                  </p>
@@ -2595,13 +2627,13 @@ const ShoppingView: React.FC<{
                   }} 
                   className="w-full bg-green-600 text-white p-6 rounded-3xl font-black shadow-xl shadow-green-100 hover:scale-[1.02] active:scale-95 transition-all"
                 >
-                  🚀 Vider la liste
+                  🚀 Supprimer la liste & la pré liste
                 </button>
                 <button 
                   onClick={() => setShowSummary(false)} 
                   className="w-full bg-gray-100 text-gray-500 p-6 rounded-3xl font-black hover:bg-gray-200 transition-all"
                 >
-                  Revenir à ma liste
+                  Revenir à ma pré liste
                 </button>
              </div>
           </div>
@@ -2643,7 +2675,11 @@ const Settings: React.FC<{
   importFromJSON: (e: React.ChangeEvent<HTMLInputElement>) => void;
   exportToExcel: () => void;
   importFromExcel: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}> = ({ settings, setSettings, exportToJSON, importFromJSON, exportToExcel, importFromExcel }) => {
+  exportPlanningToJSON: () => void;
+  importPlanningFromJSON: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  sentMeals: Set<string>;
+  setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
+}> = ({ settings, setSettings, exportToJSON, importFromJSON, exportToExcel, importFromExcel, exportPlanningToJSON, importPlanningFromJSON, sentMeals, setSentMeals }) => {
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [newFoodName, setNewFoodName] = useState('');
   const [newFoodCategory, setNewFoodCategory] = useState<string>('none');
@@ -2654,6 +2690,45 @@ const Settings: React.FC<{
   const [editingCategoryName, setEditingCategoryName] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [expandedUncategorized, setExpandedUncategorized] = useState(false);
+  const [showSecoursForm, setShowSecoursForm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [secoursBaseDate, setSecoursBaseDate] = useState(() => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - (day === 6 ? 0 : day + 1);
+    const saturday = new Date(d.setDate(diff));
+    saturday.setHours(0, 0, 0, 0);
+    return saturday;
+  });
+
+  const formatWeekRange = (date: Date) => {
+    const start = new Date(date);
+    const end = new Date(date);
+    end.setDate(end.getDate() + 6);
+    const f = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    return `du ${f(start)} au ${f(end)}`;
+  };
+
+  const handleResetWeek = () => {
+    const weekDates = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(secoursBaseDate);
+      d.setDate(secoursBaseDate.getDate() + i);
+      return d.toISOString().split('T')[0];
+    });
+
+    setSentMeals(prev => {
+      const next = new Set(prev);
+      for (const mealKey of prev) {
+        if (weekDates.some(date => mealKey.startsWith(date))) {
+          next.delete(mealKey);
+        }
+      }
+      return next;
+    });
+    setShowResetConfirm(false);
+    setShowSecoursForm(false);
+    alert("Envois réinitialisés pour cette semaine !");
+  };
 
   const currentCategories = settings.foodCategories || FOOD_CATEGORIES;
 
@@ -2954,13 +3029,231 @@ const Settings: React.FC<{
                   <input type="file" accept=".xlsx, .xls" className="hidden" onChange={importFromExcel} />
                 </label>
               </div>
+
+              <p className="text-xs font-black text-blue-600 uppercase tracking-widest border-b pb-2 mt-6">Planning (JSON)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button onClick={exportPlanningToJSON} className="bg-blue-600 text-white p-6 rounded-3xl font-black shadow-lg shadow-blue-100 hover:scale-[1.02] transition-all">Exporter Planning (JSON)</button>
+                <label className="bg-white text-blue-600 p-6 rounded-3xl font-black border-2 border-dashed border-blue-100 cursor-pointer hover:bg-blue-50 transition-all text-center">
+                  Importer Planning (JSON)
+                  <input type="file" accept=".json" className="hidden" onChange={importPlanningFromJSON} />
+                </label>
+              </div>
             </div>
           )}
         </div>
+
+        {/* SECTION SECOURS */}
+        <div className="bg-white rounded-[32px] overflow-hidden border border-gray-100 shadow-sm transition-all">
+          <button onClick={() => toggleSection('secours')} className="w-full p-8 flex items-center justify-between hover:bg-purple-50/30 transition-all text-left">
+            <div className="flex items-center gap-6">
+              <div className="w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center text-2xl">🆘</div>
+              <div>
+                <h3 className="text-xl font-black text-gray-800">Secours</h3>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Réinitialisations & Dépannage</p>
+              </div>
+            </div>
+            <svg className={`w-6 h-6 text-gray-300 transition-transform ${activeSection === 'secours' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+          </button>
+          
+          {activeSection === 'secours' && (
+            <div className="p-8 bg-gray-50/50 border-t border-gray-100 space-y-6 animate-slideDown">
+              {!showSecoursForm ? (
+                <button 
+                  onClick={() => setShowSecoursForm(true)} 
+                  className="w-full bg-white text-red-600 p-6 rounded-3xl font-black border-2 border-red-100 hover:bg-red-50 transition-all shadow-sm"
+                >
+                  Réinitialiser une semaine
+                </button>
+              ) : (
+                <div className="bg-white p-8 rounded-[32px] border border-red-100 shadow-sm space-y-6 animate-fadeIn">
+                  <div className="flex justify-between items-center border-b border-red-50 pb-4">
+                    <h4 className="text-lg font-black text-red-600">Réinitialiser une semaine</h4>
+                    <button onClick={() => setShowSecoursForm(false)} className="text-gray-400 hover:text-gray-600">×</button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <p className="text-sm font-bold text-gray-500 uppercase tracking-widest text-center">Sélectionner la semaine</p>
+                    <div className="flex items-center justify-center gap-6">
+                      <button 
+                        onClick={() => setSecoursBaseDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })}
+                        className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center hover:bg-gray-200 transition-all"
+                      >
+                        <EXT_ICONS.ArrowLeft />
+                      </button>
+                      <div className="bg-purple-50 px-6 py-3 rounded-2xl border border-purple-100">
+                        <span className="font-black text-purple-700 text-lg">{formatWeekRange(secoursBaseDate)}</span>
+                      </div>
+                      <button 
+                        onClick={() => setSecoursBaseDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })}
+                        className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center hover:bg-gray-200 transition-all"
+                      >
+                        <EXT_ICONS.ArrowRight />
+                      </button>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => setShowResetConfirm(true)}
+                    className="w-full bg-red-600 text-white p-6 rounded-3xl font-black shadow-lg shadow-red-100 hover:scale-[1.02] active:scale-95 transition-all mt-4"
+                  >
+                    réinitialiser la semaine
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {showResetConfirm && (
+          <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 animate-fadeIn">
+            <div className="bg-white rounded-[40px] p-10 max-w-md w-full shadow-2xl space-y-8 animate-scaleUp">
+              <div className="w-20 h-20 bg-red-100 rounded-3xl flex items-center justify-center text-red-600 mx-auto">
+                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              </div>
+              <div className="text-center space-y-4">
+                <h3 className="text-2xl font-black text-gray-800">Confirmation</h3>
+                <p className="text-gray-500 font-medium">voulez vous réinitialiser l'envois des recettes à la liste de courses ?</p>
+                <p className="text-xs font-black text-red-400 uppercase tracking-widest">{formatWeekRange(secoursBaseDate)}</p>
+              </div>
+              <div className="flex gap-4">
+                <button onClick={() => setShowResetConfirm(false)} className="flex-1 p-5 bg-gray-100 text-gray-500 rounded-2xl font-black hover:bg-gray-200 transition-all">Annuler</button>
+                <button onClick={handleResetWeek} className="flex-1 p-5 bg-red-600 text-white rounded-2xl font-black shadow-lg shadow-red-100 hover:scale-105 transition-all">Confirmer</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       
       <div className="pt-8">
         <button onClick={() => confirm('Effacer vos données ?') && (localStorage.clear(), window.location.reload())} className="w-full py-6 border-2 border-red-50 text-red-400 font-black rounded-[40px] hover:bg-red-50 transition-all">Réinitialiser l'application</button>
+      </div>
+    </div>
+  );
+};
+
+const Notice: React.FC = () => {
+  return (
+    <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn pb-20">
+      <header className="text-center space-y-4">
+        <h2 className="text-4xl font-black text-gray-800 tracking-tight">Notice d'utilisation</h2>
+        <p className="text-gray-500 font-medium max-w-2xl mx-auto">
+          Bienvenue dans votre assistant de gestion de cuisine. Voici un guide détaillé pour maîtriser toutes les fonctionnalités de l'application.
+        </p>
+      </header>
+
+      <div className="grid gap-6">
+        {/* RECETTES */}
+        <section className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center text-xl">📖</div>
+            <h3 className="text-2xl font-black text-gray-800">Recettes</h3>
+          </div>
+          <p className="text-gray-600 leading-relaxed">
+            C'est votre bibliothèque culinaire. Vous pouvez y enregistrer toutes vos recettes favorites.
+          </p>
+          <ul className="list-disc list-inside text-gray-500 space-y-2 ml-4">
+            <li><span className="font-bold text-gray-700">Ajouter</span> : Créez une nouvelle recette avec titre, catégorie, temps, ingrédients et étapes.</li>
+            <li><span className="font-bold text-gray-700">Modifier</span> : Ajustez vos recettes existantes à tout moment.</li>
+            <li><span className="font-bold text-gray-700">Portions</span> : Dans la fiche recette, ajustez le nombre de portions. Les quantités d'ingrédients s'adaptent automatiquement !</li>
+            <li><span className="font-bold text-gray-700">Planning</span> : Programmez une recette directement dans votre calendrier depuis sa fiche détaillée.</li>
+          </ul>
+        </section>
+
+        {/* RECHERCHE */}
+        <section className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center text-xl">🔍</div>
+            <h3 className="text-2xl font-black text-gray-800">Recherche</h3>
+          </div>
+          <p className="text-gray-600 leading-relaxed">
+            Trouvez rapidement l'inspiration parmi vos recettes enregistrées. Filtrez par nom ou par catégorie pour gagner du temps.
+          </p>
+        </section>
+
+        {/* PLANNING */}
+        <section className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center text-xl">📅</div>
+            <h3 className="text-2xl font-black text-gray-800">Planning</h3>
+          </div>
+          <p className="text-gray-600 leading-relaxed">
+            Organisez vos repas de la semaine pour une gestion optimale.
+          </p>
+          <ul className="list-disc list-inside text-gray-500 space-y-2 ml-4">
+            <li><span className="font-bold text-gray-700">Midi & Soir</span> : Deux emplacements par repas pour plus de flexibilité.</li>
+            <li><span className="font-bold text-gray-700">Extras</span> : Un espace dédié pour les viennoiseries, gâteaux, sauces et coulis.</li>
+            <li><span className="font-bold text-gray-700">Courses</span> : Envoyez les ingrédients d'un repas planifié directement vers votre liste de courses en un clic.</li>
+          </ul>
+        </section>
+
+        {/* RÉCURRENTS */}
+        <section className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-xl">🔄</div>
+            <h3 className="text-2xl font-black text-gray-800">Récurrents</h3>
+          </div>
+          <p className="text-gray-600 leading-relaxed">
+            Gérez vos listes de courses habituelles (ex: "Petit déjeuner", "Produits d'entretien").
+          </p>
+          <ul className="list-disc list-inside text-gray-500 space-y-2 ml-4">
+            <li><span className="font-bold text-gray-700">Listes</span> : Créez des groupes de produits thématiques.</li>
+            <li><span className="font-bold text-gray-700">Envoi rapide</span> : Cochez les produits manquants et cliquez sur "Envoyer aux courses" pour les ajouter à votre pré-liste.</li>
+          </ul>
+        </section>
+
+        {/* EN RÉSERVE */}
+        <section className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-yellow-100 rounded-2xl flex items-center justify-center text-xl">📦</div>
+            <h3 className="text-2xl font-black text-gray-800">En réserve</h3>
+          </div>
+          <p className="text-gray-600 leading-relaxed">
+            Gardez un œil sur vos stocks actuels. Idéal pour savoir ce qu'il vous reste dans le congélateur ou le cellier avant de faire vos courses.
+          </p>
+        </section>
+
+        {/* LISTE DE COURSES */}
+        <section className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center text-xl">🛒</div>
+            <h3 className="text-2xl font-black text-gray-800">Liste de courses (Pré-liste)</h3>
+          </div>
+          <p className="text-gray-600 leading-relaxed">
+            C'est ici que vous préparez vos achats. Les articles proviennent du planning, des récurrents ou d'ajouts manuels.
+          </p>
+          <ul className="list-disc list-inside text-gray-500 space-y-2 ml-4">
+            <li><span className="font-bold text-gray-700">Réserve latérale</span> : Consultez votre réserve tout en faisant votre liste pour éviter les doublons.</li>
+            <li><span className="font-bold text-gray-700">Validation</span> : Une fois votre pré-liste terminée, cliquez sur "Valider la Pré liste" pour générer la liste finale.</li>
+          </ul>
+        </section>
+
+        {/* LISTE FINALE */}
+        <section className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center text-xl">🚀</div>
+            <h3 className="text-2xl font-black text-gray-800">Liste de courses finale</h3>
+          </div>
+          <p className="text-gray-600 leading-relaxed">
+            Le récapitulatif optimisé pour le magasin. Les articles sont automatiquement triés par catégories (Légumes, Viandes, Épicerie...) pour un parcours efficace en rayon.
+          </p>
+        </section>
+
+        {/* RÉGLAGES */}
+        <section className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-xl">⚙️</div>
+            <h3 className="text-2xl font-black text-gray-800">Réglages</h3>
+          </div>
+          <p className="text-gray-600 leading-relaxed">
+            Configurez votre application selon vos besoins.
+          </p>
+          <ul className="list-disc list-inside text-gray-500 space-y-2 ml-4">
+            <li><span className="font-bold text-gray-700">Catégories</span> : Personnalisez les rayons de votre magasin.</li>
+            <li><span className="font-bold text-gray-700">Portions</span> : Définissez vos portions habituelles pour chaque aliment.</li>
+            <li><span className="font-bold text-gray-700">Excel / JSON</span> : Exportez vos données pour les consulter sur ordinateur ou importez-les pour changer d'appareil.</li>
+            <li className="font-bold text-gray-700">Pensez a tous enregistrer avec vos 3 fichiers les fichiers se trouve dans OneDrive &gt; Fichiers &gt; Documents &gt; Pour IA &gt; Appli repas courses &gt; Doc transfert</li>
+          </ul>
+        </section>
       </div>
     </div>
   );

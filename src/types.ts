@@ -32,7 +32,7 @@ export interface ShoppingListItem {
   checked: boolean;
 }
 
-export type AppTab = 'recipes' | 'search' | 'planning' | 'recurring' | 'reserve' | 'shopping' | 'settings';
+export type AppTab = 'recipes' | 'search' | 'planning' | 'recurring' | 'reserve' | 'shopping' | 'settings' | 'notice';
 
 export interface UserSettings {
   userName: string;
