@@ -554,6 +554,8 @@ export default function App() {
             onAddFoodToSettings={handleQuickAddFoodToSettings}
             reserveItems={reserveItems}
             setReserveItems={setReserveItems}
+            pantryGroups={pantryGroups}
+            setPantryGroups={setPantryGroups}
           />
         )}
         {activeTab === 'settings' && (
@@ -1700,6 +1702,13 @@ const RecurringView: React.FC<{
     }));
   };
 
+  const uncheckAll = () => {
+    setGroups(prev => prev.map(g => ({
+      ...g,
+      items: g.items.map(i => ({ ...i, checked: false }))
+    })));
+  };
+
   const onDragStart = (e: React.DragEvent, itemId: string, sourceGroupId: string) => {
     e.dataTransfer.setData("text/plain", JSON.stringify({ itemId, sourceGroupId }));
     e.dataTransfer.effectAllowed = "move";
@@ -1734,20 +1743,28 @@ const RecurringView: React.FC<{
 
   return (
     <div className="max-w-4xl mx-auto space-y-10 animate-fadeIn pb-32 px-2 relative">
-      <header className="flex justify-between items-center">
+      <header className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <h2 className="text-3xl font-black text-gray-800 tracking-tight">Récurrents</h2>
         {!isAddingList && (
-          <button 
-            onClick={() => {
-              setEditingGroupId(null);
-              setNewListName('');
-              setTempItems([]);
-              setIsAddingList(true);
-            }} 
-            className="bg-purple-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-purple-100 hover:scale-105 transition-all"
-          >
-            Ajouter une liste
-          </button>
+          <div className="flex gap-3">
+            <button 
+              onClick={uncheckAll}
+              className="bg-green-600 text-white px-6 py-3 rounded-2xl font-black shadow-lg shadow-green-100 hover:scale-105 transition-all"
+            >
+              Tous décocher
+            </button>
+            <button 
+              onClick={() => {
+                setEditingGroupId(null);
+                setNewListName('');
+                setTempItems([]);
+                setIsAddingList(true);
+              }} 
+              className="bg-purple-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-purple-100 hover:scale-105 transition-all"
+            >
+              Ajouter une liste
+            </button>
+          </div>
         )}
       </header>
 
@@ -2345,14 +2362,19 @@ const ShoppingView: React.FC<{
   setList: React.Dispatch<React.SetStateAction<ShoppingListItem[]>>; 
   settings: UserSettings;
   foodPortions: FoodPortion[];
+  foodCategories: string[];
   onAddFoodToSettings: (name: string, unit: string, category: string) => void;
   reserveItems: ShoppingListItem[];
   setReserveItems: React.Dispatch<React.SetStateAction<ShoppingListItem[]>>;
-}> = ({ list, setList, settings, foodPortions, onAddFoodToSettings, reserveItems, setReserveItems }) => {
+  pantryGroups: PantryGroup[];
+  setPantryGroups: React.Dispatch<React.SetStateAction<PantryGroup[]>>;
+}> = ({ list, setList, settings, foodPortions, foodCategories, onAddFoodToSettings, reserveItems, setReserveItems, pantryGroups, setPantryGroups }) => {
   const [showSummary, setShowSummary] = useState(false);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [checkedSummaryItems, setCheckedSummaryItems] = useState<Set<string>>(new Set());
   const [showReserveOnSide, setShowReserveOnSide] = useState(false);
+  const [showNewFoodModal, setShowNewFoodModal] = useState(false);
+  const [newFoodCategory, setNewFoodCategory] = useState<string>(foodCategories[0] || 'Épicerie');
   
   const [newItemName, setNewItemName] = useState('');
   const [newItemAmount, setNewItemAmount] = useState(1);
@@ -2374,7 +2396,16 @@ const ShoppingView: React.FC<{
     const name = newItemName.trim();
     const unit = newItemUnit;
 
-    onAddFoodToSettings(name, unit, 'Épicerie');
+    const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const normalizedInput = normalize(name);
+    const existing = foodPortions.find(fp => normalize(fp.name) === normalizedInput);
+
+    if (!existing) {
+      setShowNewFoodModal(true);
+      return;
+    }
+
+    onAddFoodToSettings(name, unit, existing.category || 'Épicerie');
 
     const item: ShoppingListItem = {
       id: Math.random().toString(36).substr(2, 9),
@@ -2386,6 +2417,22 @@ const ShoppingView: React.FC<{
     setList(prev => [item, ...prev]);
     setNewItemName('');
     setNewItemAmount(1);
+  };
+
+  const confirmNewFood = () => {
+    const name = newItemName.trim();
+    onAddFoodToSettings(name, newItemUnit, newFoodCategory);
+    const item: ShoppingListItem = {
+      id: Math.random().toString(36).substr(2, 9),
+      name,
+      amount: newItemAmount,
+      unit: newItemUnit,
+      checked: false
+    };
+    setList(prev => [item, ...prev]);
+    setNewItemName('');
+    setNewItemAmount(1);
+    setShowNewFoodModal(false);
   };
 
   useEffect(() => {
@@ -2623,6 +2670,10 @@ const ShoppingView: React.FC<{
                 <button 
                   onClick={() => {
                     setList([]);
+                    setPantryGroups(prev => prev.map(g => ({
+                      ...g,
+                      items: g.items.map(i => ({ ...i, checked: false }))
+                    })));
                     setShowSummary(false);
                   }} 
                   className="w-full bg-green-600 text-white p-6 rounded-3xl font-black shadow-xl shadow-green-100 hover:scale-[1.02] active:scale-95 transition-all"
@@ -2664,6 +2715,37 @@ const ShoppingView: React.FC<{
           </div>
         </div>
       )}
+
+      {/* MODAL NOUVEL ALIMENT (Ajout rapide) */}
+      {showNewFoodModal && (
+        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white rounded-[40px] p-8 max-w-sm w-full shadow-2xl space-y-6 text-center animate-slideUp">
+            <div className="w-16 h-16 bg-purple-50 text-purple-500 rounded-full flex items-center justify-center mx-auto mb-2 text-2xl">✨</div>
+            <h3 className="text-xl font-black text-gray-800">Nouvel Aliment</h3>
+            <p className="text-gray-500 font-medium">
+              L'aliment <span className="text-purple-600 font-bold">"{newItemName}"</span> est nouveau. Dans quelle catégorie souhaitez-vous le classer ?
+            </p>
+            <select 
+              className="w-full p-4 border border-gray-100 rounded-2xl bg-gray-50 font-bold outline-none cursor-pointer"
+              value={newFoodCategory}
+              onChange={e => setNewFoodCategory(e.target.value)}
+            >
+              {foodCategories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setShowNewFoodModal(false)} className="flex-1 p-4 bg-gray-100 text-gray-500 rounded-2xl font-black active:scale-95 transition-all">Annuler</button>
+              <button 
+                onClick={confirmNewFood} 
+                className="flex-1 p-4 bg-purple-600 text-white rounded-2xl font-black shadow-lg shadow-purple-100 active:scale-95 transition-all"
+              >
+                Ajouter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -2692,6 +2774,12 @@ const Settings: React.FC<{
   const [expandedUncategorized, setExpandedUncategorized] = useState(false);
   const [showSecoursForm, setShowSecoursForm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showEditFoodForm, setShowEditFoodForm] = useState(false);
+  const [selectedFoodId, setSelectedFoodId] = useState<string>('');
+  const [futureCategory, setFutureCategory] = useState<string>('none');
+  const [showEditSuccessModal, setShowEditSuccessModal] = useState(false);
+  const [lastEditedFoodName, setLastEditedFoodName] = useState('');
+  const [lastEditedCategoryName, setLastEditedCategoryName] = useState('');
   const [secoursBaseDate, setSecoursBaseDate] = useState(() => {
     const d = new Date();
     const day = d.getDay();
@@ -2728,6 +2816,27 @@ const Settings: React.FC<{
     setShowResetConfirm(false);
     setShowSecoursForm(false);
     alert("Envois réinitialisés pour cette semaine !");
+  };
+
+  const handleCategoryChange = () => {
+    const food = (settings.foodPortions || []).find(f => f.id === selectedFoodId);
+    if (!food) return;
+
+    const catName = futureCategory === 'none' ? undefined : futureCategory;
+    
+    setSettings(prev => ({
+      ...prev,
+      foodPortions: (prev.foodPortions || []).map(f => 
+        f.id === selectedFoodId ? { ...f, category: catName } : f
+      )
+    }));
+
+    setLastEditedFoodName(food.name);
+    setLastEditedCategoryName(futureCategory === 'none' ? 'Sans catégorie' : futureCategory);
+    setShowEditSuccessModal(true);
+    setShowEditFoodForm(false);
+    setSelectedFoodId('');
+    setFutureCategory('none');
   };
 
   const currentCategories = settings.foodCategories || FOOD_CATEGORIES;
@@ -2820,6 +2929,76 @@ const Settings: React.FC<{
           
           {activeSection === 'food' && (
             <div className="p-8 bg-gray-50/50 border-t border-gray-100 space-y-12 animate-slideDown">
+              {/* Modifier un aliment section */}
+              <div className="space-y-4">
+                <button 
+                  onClick={() => setShowEditFoodForm(!showEditFoodForm)}
+                  className="w-full bg-white text-purple-600 p-4 rounded-2xl font-black border-2 border-purple-100 hover:bg-purple-50 transition-all shadow-sm flex items-center justify-center gap-3"
+                >
+                  <EXT_ICONS.Edit />
+                  Modifier un aliment
+                </button>
+
+                {showEditFoodForm && (
+                  <div className="bg-white p-6 rounded-3xl border border-purple-100 shadow-sm space-y-6 animate-fadeIn">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">Nom de l'aliment</label>
+                        <select 
+                          className="w-full p-4 border border-gray-100 rounded-2xl bg-gray-50 font-bold outline-none mt-1"
+                          value={selectedFoodId}
+                          onChange={e => setSelectedFoodId(e.target.value)}
+                        >
+                          <option value="">Sélectionner un aliment...</option>
+                          {(settings.foodPortions || []).sort((a,b) => a.name.localeCompare(b.name)).map(f => (
+                            <option key={f.id} value={f.id}>{f.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {selectedFoodId && (
+                        <div className="animate-fadeIn">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Catégorie actuelle</label>
+                          <div className="p-4 bg-gray-100 rounded-2xl font-bold text-gray-600 mt-1">
+                            {(settings.foodPortions || []).find(f => f.id === selectedFoodId)?.category || 'Sans catégorie'}
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">Catégorie futur</label>
+                        <select 
+                          className="w-full p-4 border border-gray-100 rounded-2xl bg-gray-50 font-bold outline-none mt-1"
+                          value={futureCategory}
+                          onChange={e => setFutureCategory(e.target.value)}
+                        >
+                          <option value="none">Sans catégorie</option>
+                          {currentCategories.map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      <button 
+                        onClick={() => { setShowEditFoodForm(false); setSelectedFoodId(''); setFutureCategory('none'); }} 
+                        className="flex-1 p-4 bg-gray-100 text-gray-500 rounded-2xl font-black active:scale-95 transition-all"
+                      >
+                        Annuler
+                      </button>
+                      <button 
+                        onClick={handleCategoryChange}
+                        disabled={!selectedFoodId}
+                        className={`flex-1 p-4 rounded-2xl font-black shadow-lg transition-all active:scale-95 ${selectedFoodId ? 'bg-purple-600 text-white shadow-purple-100' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                      >
+                        Changement de catégories
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Main Aliments List (Uncategorized) */}
               <div className="space-y-6">
                 <button 
@@ -3123,6 +3302,28 @@ const Settings: React.FC<{
           </div>
         )}
       </div>
+
+      {showEditSuccessModal && (
+        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white rounded-[40px] p-10 max-w-md w-full shadow-2xl space-y-6 text-center animate-scaleUp">
+            <div className="w-20 h-20 bg-green-100 rounded-3xl flex items-center justify-center text-green-600 mx-auto">
+              <EXT_ICONS.Check />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black text-gray-800">Succès !</h3>
+              <p className="text-gray-500 font-medium">
+                L' aliment <span className="text-purple-600 font-bold">"{lastEditedFoodName}"</span> a bien été placer dans la catégorie <span className="text-purple-600 font-bold">"{lastEditedCategoryName}"</span>
+              </p>
+            </div>
+            <button 
+              onClick={() => setShowEditSuccessModal(false)} 
+              className="w-full p-5 bg-purple-600 text-white rounded-2xl font-black shadow-lg shadow-purple-100 hover:scale-105 transition-all"
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
       
       <div className="pt-8">
         <button onClick={() => confirm('Effacer vos données ?') && (localStorage.clear(), window.location.reload())} className="w-full py-6 border-2 border-red-50 text-red-400 font-black rounded-[40px] hover:bg-red-50 transition-all">Réinitialiser l'application</button>
