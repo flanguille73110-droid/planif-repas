@@ -2146,6 +2146,7 @@ const Planning: React.FC<{
                             value={mealPlan[key]?.[type]?.[slot] || ''}
                             onChange={value => updateMealPlan(key, type, slot, value || undefined)}
                             placeholder="Vide"
+                            selectedClassName="text-blue-600 font-bold"
                           />
                         </div>
                       ))}
@@ -2177,7 +2178,7 @@ const Planning: React.FC<{
                         )}
                       </div>
                       <select 
-                        className={`w-full text-[10px] font-bold bg-pink-50/30 p-2 rounded-xl border transition-all ${mealPlan[key]?.viennoiseries?.[i] && sentMeals.has(`${key}-viennoiseries-${i}`) ? 'border-green-400 ring-1 ring-green-100' : 'border-transparent focus:border-pink-200'}`}
+                        className={`w-full text-[10px] font-bold bg-pink-50/30 p-2 rounded-xl border transition-all ${mealPlan[key]?.viennoiseries?.[i] ? 'text-blue-600' : ''} ${mealPlan[key]?.viennoiseries?.[i] && sentMeals.has(`${key}-viennoiseries-${i}`) ? 'border-green-400 ring-1 ring-green-100' : 'border-transparent focus:border-pink-200'}`}
                         value={mealPlan[key]?.viennoiseries?.[i] || ''}
                         onChange={e => updateMealPlan(key, 'extra', 'viennoiseries', e.target.value || undefined, i)}
                       >
@@ -2204,7 +2205,7 @@ const Planning: React.FC<{
                         )}
                       </div>
                       <select 
-                        className={`w-full text-[10px] font-bold bg-blue-50/30 p-2 rounded-xl border transition-all ${mealPlan[key]?.sauces?.[i] && sentMeals.has(`${key}-sauces-${i}`) ? 'border-green-400 ring-1 ring-green-100' : 'border-transparent focus:border-blue-200'}`}
+                        className={`w-full text-[10px] font-bold bg-blue-50/30 p-2 rounded-xl border transition-all ${mealPlan[key]?.sauces?.[i] ? 'text-blue-600' : ''} ${mealPlan[key]?.sauces?.[i] && sentMeals.has(`${key}-sauces-${i}`) ? 'border-green-400 ring-1 ring-green-100' : 'border-transparent focus:border-blue-200'}`}
                         value={mealPlan[key]?.sauces?.[i] || ''}
                         onChange={e => updateMealPlan(key, 'extra', 'sauces', e.target.value || undefined, i)}
                       >
@@ -2277,7 +2278,7 @@ const Planning: React.FC<{
                                   <div key={slot} className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl border border-gray-100">
                                     <div className="flex-1 min-w-0">
                                       <span className="text-[7px] font-black uppercase text-purple-400 block mb-0.5">Recette {idx + 1}</span>
-                                      <span className="font-bold text-gray-700 text-sm truncate block">{r.title}</span>
+                                      <span className="font-black text-blue-600 text-sm truncate block">{r.title}</span>
                                     </div>
                                     {sentMeals.has(`${dateStr}-${type}-${slot}`) ? (
                                       <span className="bg-green-100 text-green-600 p-1.5 rounded-xl flex items-center gap-1 text-[10px] font-black shrink-0">
@@ -2311,7 +2312,7 @@ const Planning: React.FC<{
                             <div key={`${slot}-${index}`} className={`flex justify-between items-center p-3 rounded-2xl border ${slot === 'viennoiseries' ? 'bg-pink-50 border-pink-100' : 'bg-blue-50 border-blue-100'}`}>
                               <div className="flex-1 min-w-0">
                                 <span className={`text-[7px] font-black uppercase block mb-0.5 ${slot === 'viennoiseries' ? 'text-pink-400' : 'text-blue-400'}`}>{slot === 'viennoiseries' ? 'Viennoiserie et Gâteau' : 'Sauce et Coulis'} #{index + 1}</span>
-                                <span className="font-bold text-gray-700 text-sm truncate block">{r.title}</span>
+                                <span className="font-black text-blue-600 text-sm truncate block">{r.title}</span>
                               </div>
                               {sentMeals.has(`${dateStr}-${slot}-${index}`) ? (
                                 <span className="bg-green-100 text-green-600 p-1.5 rounded-xl flex items-center gap-1 text-[10px] font-black shrink-0">

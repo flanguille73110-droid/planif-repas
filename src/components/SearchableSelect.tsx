@@ -5,9 +5,10 @@ interface SearchableSelectProps {
   value: string | undefined;
   onChange: (value: string | undefined) => void;
   placeholder?: string;
+  selectedClassName?: string;
 }
 
-export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, value, onChange, placeholder }) => {
+export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, value, onChange, placeholder, selectedClassName }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -47,7 +48,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
         className="w-full bg-white border border-gray-200 rounded-xl p-3 text-left flex items-center justify-between"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className="truncate">{selectedOption?.title || placeholder || 'Sélectionner...'}</span>
+        <span className={`truncate ${value && selectedClassName ? selectedClassName : ''}`}>
+          {selectedOption?.title || placeholder || 'Sélectionner...'}
+        </span>
         <svg className={`w-5 h-5 text-gray-400 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
         </svg>
