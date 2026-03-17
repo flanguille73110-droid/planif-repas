@@ -522,6 +522,7 @@ export default function App() {
             onMergeToShopping={mergeToShoppingList}
             sentMeals={sentMeals}
             setSentMeals={setSentMeals}
+            settings={settings}
           />
         )}
         {activeTab === 'recurring' && (
@@ -1965,16 +1966,25 @@ const Planning: React.FC<{
   onMergeToShopping: (items: ShoppingListItem[]) => void;
   sentMeals: Set<string>;
   setSentMeals: React.Dispatch<React.SetStateAction<Set<string>>>;
-}> = ({ mealPlan, recipes, updateMealPlan, onMergeToShopping, sentMeals, setSentMeals }) => {
+  settings: UserSettings;
+}> = ({ mealPlan, recipes, updateMealPlan, onMergeToShopping, sentMeals, setSentMeals, settings }) => {
   const [showSummary, setShowSummary] = useState(false);
   
-  const [baseDate, setBaseDate] = useState(() => {
-    const d = new Date();
+  const getStartOfWeek = (date: Date, startDay: number) => {
+    const d = new Date(date);
     const day = d.getDay();
-    // Start on Saturday (6)
-    const diff = d.getDate() - (day === 6 ? 0 : day + 1);
-    return new Date(d.setDate(diff));
-  });
+    const diff = (day - startDay + 7) % 7;
+    const startOfWeek = new Date(d);
+    startOfWeek.setDate(d.getDate() - diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+    return startOfWeek;
+  };
+
+  const [baseDate, setBaseDate] = useState(() => getStartOfWeek(new Date(), settings.startDay ?? 6));
+
+  useEffect(() => {
+    setBaseDate(prev => getStartOfWeek(prev, settings.startDay ?? 6));
+  }, [settings.startDay]);
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(baseDate);
@@ -2075,6 +2085,32 @@ const Planning: React.FC<{
     setShowSummary(false); // Ferme la fenêtre après l'envoi
   };
 
+  const unsentCount = useMemo(() => {
+    let count = 0;
+    days.forEach(d => {
+      const key = d.toISOString().split('T')[0];
+      const plan = mealPlan[key];
+      if (!plan) return;
+      (['lunch', 'dinner'] as const).forEach(type => {
+        const meal = plan[type];
+        if (!meal) return;
+        (['recipe1', 'recipe2'] as const).forEach(slot => {
+          const recipeId = meal[slot];
+          if (recipeId && !sentMeals.has(`${key}-${type}-${slot}`)) count++;
+        });
+      });
+      if (d.getDay() === 0) {
+        (['viennoiseries', 'sauces'] as const).forEach(slot => {
+          const recipeIds = plan[slot] || [];
+          recipeIds.forEach((recipeId, index) => {
+            if (recipeId && !sentMeals.has(`${key}-${slot}-${index}`)) count++;
+          });
+        });
+      }
+    });
+    return count;
+  }, [days, mealPlan, sentMeals]);
+
   const changeWeek = (offset: number) => {
     const next = new Date(baseDate);
     next.setDate(baseDate.getDate() + (offset * 7));
@@ -2091,16 +2127,23 @@ const Planning: React.FC<{
   return (
     <div className="space-y-8 animate-fadeIn relative pb-20">
       <header className="grid grid-cols-3 items-center gap-4 py-4">
-        <div className="flex items-center gap-4 bg-purple-50 p-2 rounded-2xl border border-purple-100">
-          <button onClick={() => changeWeek(-1)} className="p-2 hover:bg-purple-100 rounded-xl transition-all text-purple-600">
-            <EXT_ICONS.ArrowLeft />
-          </button>
-          <span className="text-xs font-black uppercase tracking-widest text-purple-600 min-w-[180px] text-center">
-            {formatWeekRange(baseDate)}
-          </span>
-          <button onClick={() => changeWeek(1)} className="p-2 hover:bg-purple-100 rounded-xl transition-all text-purple-600">
-            <EXT_ICONS.ArrowRight />
-          </button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 bg-violet-50 p-2 rounded-2xl border border-violet-100">
+            <button onClick={() => changeWeek(-1)} className="p-2 hover:bg-violet-100 rounded-xl transition-all text-violet-600">
+              <EXT_ICONS.ArrowLeft />
+            </button>
+            <span className="text-xs font-black uppercase tracking-widest text-violet-600 min-w-[180px] text-center">
+              {formatWeekRange(baseDate)}
+            </span>
+            <button onClick={() => changeWeek(1)} className="p-2 hover:bg-violet-100 rounded-xl transition-all text-violet-600">
+              <EXT_ICONS.ArrowRight />
+            </button>
+          </div>
+          {unsentCount > 0 && (
+            <div className="bg-red-500 text-white text-xs font-black px-3 py-2 rounded-full shadow-lg">
+              {unsentCount}
+            </div>
+          )}
         </div>
         <div className="text-center">
           <h2 className="text-3xl font-black text-gray-800 tracking-tight">Mon Planning</h2>
@@ -2228,16 +2271,22 @@ const Planning: React.FC<{
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-2xl font-black text-gray-800">Recettes au Planning</h3>
-                <div className="flex items-center gap-2 mt-2 bg-gray-50 p-1.5 rounded-xl border border-gray-100">
-                  <button onClick={() => changeWeek(-1)} className="p-1 hover:bg-gray-200 rounded-lg text-gray-600">
-                    <EXT_ICONS.ArrowLeft />
-                  </button>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 min-w-[140px] text-center">
-                    {formatWeekRange(baseDate)}
-                  </span>
-                  <button onClick={() => changeWeek(1)} className="p-1 hover:bg-gray-200 rounded-lg text-gray-600">
-                    <EXT_ICONS.ArrowRight />
-                  </button>
+                <div className="flex items-center gap-4 mt-2">
+                  <div className="flex items-center gap-2 bg-violet-50 p-1.5 rounded-xl border border-violet-100">
+                    <button onClick={() => changeWeek(-1)} className="p-1 hover:bg-violet-100 rounded-lg text-violet-600">
+                      <EXT_ICONS.ArrowLeft />
+                    </button>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-violet-500 min-w-[140px] text-center">
+                      {formatWeekRange(baseDate)}
+                    </span>
+                    <button onClick={() => changeWeek(1)} className="p-1 hover:bg-violet-100 rounded-lg text-violet-600">
+                      <EXT_ICONS.ArrowRight />
+                    </button>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-[8px] font-black uppercase tracking-widest text-gray-400">Recettes a envoyer</span>
+                    <span className="text-sm font-black text-red-500">{unsentCount}</span>
+                  </div>
                 </div>
               </div>
               <button onClick={() => setShowSummary(false)} className="p-3 bg-gray-100 rounded-full hover:bg-gray-200">×</button>
@@ -2915,6 +2964,41 @@ const Settings: React.FC<{
       <h2 className="text-3xl font-black text-gray-800 text-center tracking-tight mb-8">Réglages</h2>
       
       <div className="space-y-4">
+        {/* SECTION PARAMÈTRES */}
+        <div className="bg-white rounded-[32px] overflow-hidden border border-gray-100 shadow-sm transition-all">
+          <button onClick={() => toggleSection('params')} className="w-full p-8 flex items-center justify-between hover:bg-purple-50/30 transition-all text-left">
+            <div className="flex items-center gap-6">
+              <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center text-2xl">⚙️</div>
+              <div>
+                <h3 className="text-xl font-black text-gray-800">Paramètres</h3>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Configuration</p>
+              </div>
+            </div>
+            <svg className={`w-6 h-6 text-gray-300 transition-transform ${activeSection === 'params' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+          </button>
+          
+          {activeSection === 'params' && (
+            <div className="p-8 bg-gray-50/50 border-t border-gray-100 space-y-12 animate-slideDown">
+              <div className="space-y-4">
+                <label className="text-sm font-black text-gray-800">Par quelle journée voulez vous commencer votre semaine ?</label>
+                <select 
+                  className="w-full p-4 border border-gray-100 rounded-2xl bg-white font-bold outline-none"
+                  value={settings.startDay ?? 1}
+                  onChange={e => setSettings(prev => ({ ...prev, startDay: parseInt(e.target.value) }))}
+                >
+                  <option value={0}>Dimanche</option>
+                  <option value={1}>Lundi</option>
+                  <option value={2}>Mardi</option>
+                  <option value={3}>Mercredi</option>
+                  <option value={4}>Jeudi</option>
+                  <option value={5}>Vendredi</option>
+                  <option value={6}>Samedi</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* SECTION ALIMENTS */}
         <div className="bg-white rounded-[32px] overflow-hidden border border-gray-100 shadow-sm transition-all">
           <button onClick={() => toggleSection('food')} className="w-full p-8 flex items-center justify-between hover:bg-purple-50/30 transition-all text-left">

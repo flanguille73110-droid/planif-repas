@@ -42,6 +42,7 @@ export interface UserSettings {
   dietaryRestrictions: string[];
   foodCategories: string[];
   foodPortions: FoodPortion[];
+  startDay?: number;
 }
 
 export interface FoodPortion {
