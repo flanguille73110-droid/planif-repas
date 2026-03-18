@@ -1980,7 +1980,13 @@ const Planning: React.FC<{
     return startOfWeek;
   };
 
-  const [baseDate, setBaseDate] = useState(() => getStartOfWeek(new Date(), settings.startDay ?? 6));
+  const [baseDate, setBaseDate] = useState(() => {
+    const start = getStartOfWeek(new Date(), settings.startDay ?? 6);
+    if (settings.defaultWeek === 'next') {
+      start.setDate(start.getDate() + 7);
+    }
+    return start;
+  });
 
   useEffect(() => {
     setBaseDate(prev => getStartOfWeek(prev, settings.startDay ?? 6));
@@ -2993,6 +2999,17 @@ const Settings: React.FC<{
                   <option value={4}>Jeudi</option>
                   <option value={5}>Vendredi</option>
                   <option value={6}>Samedi</option>
+                </select>
+              </div>
+              <div className="space-y-4">
+                <label className="text-sm font-black text-gray-800">Quelle semaine voulez vous afficher par défaut dans planning ?</label>
+                <select 
+                  className="w-full p-4 border border-gray-100 rounded-2xl bg-white font-bold outline-none"
+                  value={settings.defaultWeek ?? 'current'}
+                  onChange={e => setSettings(prev => ({ ...prev, defaultWeek: e.target.value as 'current' | 'next' }))}
+                >
+                  <option value="current">Semaine actuelle</option>
+                  <option value="next">Semaine prochaine</option>
                 </select>
               </div>
             </div>

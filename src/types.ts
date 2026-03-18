@@ -43,6 +43,7 @@ export interface UserSettings {
   foodCategories: string[];
   foodPortions: FoodPortion[];
   startDay?: number;
+  defaultWeek?: 'current' | 'next';
 }
 
 export interface FoodPortion {
