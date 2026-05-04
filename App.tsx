@@ -170,6 +170,8 @@ export default function App() {
     }
   });
 
+  const [showQuickBackupModal, setShowQuickBackupModal] = useState(false);
+
   useEffect(() => {
     localStorage.setItem('culina_recipes', JSON.stringify(recipes));
     localStorage.setItem('culina_plan_v2', JSON.stringify(mealPlan));
@@ -467,9 +469,16 @@ export default function App() {
     e.target.value = ""; // Reset input
   };
 
+  const handleQuickBackup = () => {
+    exportToJSON();
+    exportToExcel();
+    exportPlanningToJSON();
+    setShowQuickBackupModal(true);
+  };
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row pb-20 md:pb-0">
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} onQuickBackup={handleQuickBackup} />
       <main className="flex-1 overflow-y-auto p-4 md:p-8 max-w-6xl mx-auto w-full">
         {activeTab === 'recipes' && (
           <RecipeBook 
@@ -578,13 +587,34 @@ export default function App() {
           <Notice />
         )}
       </main>
+
+      {/* MODAL CONFIRMATION SAUVEGARDE RAPIDE */}
+      {showQuickBackupModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white rounded-[40px] w-full max-w-sm overflow-hidden shadow-2xl animate-scaleUp">
+            <div className="p-10 text-center">
+              <div className="w-20 h-20 bg-green-100 rounded-3xl flex items-center justify-center mx-auto mb-8 text-3xl">✅</div>
+              <h3 className="text-2xl font-black text-gray-900 mb-4 tracking-tight">Sauvegarde terminée !</h3>
+              <p className="text-gray-500 font-medium mb-8 leading-relaxed">
+                Les 3 fichiers (JSON Backup, Excel Stocks et JSON Planning) ont été téléchargés avec succès.
+              </p>
+              <button 
+                onClick={() => setShowQuickBackupModal(false)}
+                className="w-full bg-green-600 text-white p-6 rounded-3xl font-black shadow-lg shadow-green-200 hover:bg-green-700 transition-all transform active:scale-95"
+              >
+                Génial !
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // --- Components ---
 
-const Navbar: React.FC<{ activeTab: AppTab; setActiveTab: (t: AppTab) => void }> = ({ activeTab, setActiveTab }) => {
+const Navbar: React.FC<{ activeTab: AppTab; setActiveTab: (t: AppTab) => void; onQuickBackup: () => void }> = ({ activeTab, setActiveTab, onQuickBackup }) => {
   const tabs: { id: AppTab; label: string; icon: React.ReactNode }[] = [
     { id: 'recipes', label: 'Recettes', icon: <EXT_ICONS.Book /> },
     { id: 'search', label: 'Recherche', icon: <EXT_ICONS.Search /> },
@@ -604,6 +634,14 @@ const Navbar: React.FC<{ activeTab: AppTab; setActiveTab: (t: AppTab) => void }>
             {tab.icon} <span className="text-[10px] md:text-sm font-bold whitespace-nowrap">{tab.label}</span>
           </button>
         ))}
+        <button 
+          onClick={onQuickBackup}
+          className="flex flex-col items-center md:flex-row md:gap-4 p-2 md:px-4 md:py-3 rounded-xl transition-all shrink-0 text-blue-600 hover:bg-blue-50 border-2 border-transparent md:mt-4 md:border-blue-100 md:bg-white"
+          title="Sauvegarde rapide"
+        >
+          <span>💾</span>
+          <span className="text-[10px] md:text-xs font-black whitespace-nowrap uppercase tracking-widest">Sauvegarde</span>
+        </button>
       </div>
     </nav>
   );
@@ -3175,7 +3213,7 @@ const Settings: React.FC<{
                         >
                           <option value="">Sélectionner un aliment...</option>
                           {(settings.foodPortions || []).sort((a,b) => a.name.localeCompare(b.name)).map(f => (
-                            <option key={f.id} value={f.id}>{f.name}</option>
+                            <option key={f.id} value={f.id}>{f.name} [{f.category || 'Sans catégorie'}]</option>
                           ))}
                         </select>
                       </div>
