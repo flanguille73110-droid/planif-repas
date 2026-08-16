@@ -64,6 +64,13 @@ const formatTotalTime = (minutes: number) => {
   return `${minutes} min`;
 };
 
+const formatDateKey = (d: Date): string => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 // --- Main App ---
 
 export default function App() {
@@ -268,12 +275,21 @@ export default function App() {
   };
 
   const exportToJSON = () => {
-    const data = { recipes, mealPlan, settings, shoppingList, pantryGroups, reserveItems };
+    const today = formatDateKey(new Date());
+    const data = {
+      recipes,
+      mealPlan,
+      settings,
+      shoppingList,
+      pantryGroups,
+      reserveItems,
+      sentMeals: Array.from(sentMeals)
+    };
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `culinashare_backup.json`;
+    a.download = `culinashare_backup_${today}.json`;
     a.click();
   };
 
@@ -290,6 +306,9 @@ export default function App() {
         if (data.shoppingList) setShoppingList(data.shoppingList);
         if (data.pantryGroups) setPantryGroups(data.pantryGroups);
         if (data.reserveItems) setReserveItems(data.reserveItems);
+        if (data.sentMeals && Array.isArray(data.sentMeals)) {
+          setSentMeals(new Set(data.sentMeals));
+        }
         alert("Données importées avec succès !");
       } catch (err) { alert("Erreur lors de l'importation."); }
     };
@@ -297,11 +316,16 @@ export default function App() {
   };
 
   const exportPlanningToJSON = () => {
-    const blob = new Blob([JSON.stringify(mealPlan)], { type: 'application/json' });
+    const today = formatDateKey(new Date());
+    const data = {
+      mealPlan,
+      sentMeals: Array.from(sentMeals)
+    };
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `culinashare_planning.json`;
+    a.download = `culinashare_planning_${today}.json`;
     a.click();
   };
 
@@ -312,7 +336,12 @@ export default function App() {
     reader.onload = (evt) => {
       try {
         const data = JSON.parse(evt.target?.result as string);
-        setMealPlan(data);
+        if (data && typeof data === 'object' && ('mealPlan' in data || 'sentMeals' in data)) {
+          if (data.mealPlan) setMealPlan(data.mealPlan);
+          if (Array.isArray(data.sentMeals)) setSentMeals(new Set(data.sentMeals));
+        } else {
+          setMealPlan(data);
+        }
         alert("Planning importé avec succès !");
       } catch (err) { alert("Erreur lors de l'importation du planning."); }
     };
@@ -320,6 +349,7 @@ export default function App() {
   };
 
   const exportToExcel = () => {
+    const today = formatDateKey(new Date());
     const XLSX = (window as any).XLSX;
     if (!XLSX) {
       alert("La bibliothèque d'export Excel n'est pas chargée.");
@@ -357,7 +387,7 @@ export default function App() {
     const wsFood = XLSX.utils.json_to_sheet(foodData);
     XLSX.utils.book_append_sheet(workbook, wsFood, "Aliments");
 
-    XLSX.writeFile(workbook, "culinashare_stocks.xlsx");
+    XLSX.writeFile(workbook, `culinashare_stocks_${today}.xlsx`);
   };
 
   const importFromExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1155,7 +1185,7 @@ const RecipeDetail: React.FC<{
                 {Array.from({ length: 7 }, (_, i) => {
                   const d = new Date(availabilityWeekDate);
                   d.setDate(availabilityWeekDate.getDate() + i);
-                  const dateStr = d.toISOString().split('T')[0];
+                  const dateStr = formatDateKey(d);
                   
                   return (
                     <div key={dateStr} className="bg-gray-50/50 p-4 rounded-[32px] border border-gray-100 space-y-3">
@@ -1199,7 +1229,7 @@ const RecipeDetail: React.FC<{
                 const isAlreadyInWeek = Array.from({ length: 7 }, (_, j) => {
                   const dj = new Date(availabilityWeekDate);
                   dj.setDate(availabilityWeekDate.getDate() + j);
-                  const djStr = dj.toISOString().split('T')[0];
+                  const djStr = formatDateKey(dj);
                   const plan = mealPlan[djStr];
                   return (plan?.lunch?.recipe1 === recipe.id || plan?.lunch?.recipe2 === recipe.id || plan?.dinner?.recipe1 === recipe.id || plan?.dinner?.recipe2 === recipe.id);
                 }).some(v => v);
@@ -2140,7 +2170,7 @@ const Planning: React.FC<{
     let addedCount = 0;
 
     days.forEach(d => {
-      const key = d.toISOString().split('T')[0];
+      const key = formatDateKey(d);
       const plan = mealPlan[key];
       if (!plan) return;
 
@@ -2206,7 +2236,7 @@ const Planning: React.FC<{
   const unsentCount = useMemo(() => {
     let count = 0;
     days.forEach(d => {
-      const key = d.toISOString().split('T')[0];
+      const key = formatDateKey(d);
       const plan = mealPlan[key];
       if (!plan) return;
       (['lunch', 'dinner'] as const).forEach(type => {
@@ -2279,7 +2309,7 @@ const Planning: React.FC<{
       </header>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {days.map(d => {
-          const key = d.toISOString().split('T')[0];
+          const key = formatDateKey(d);
           return (
             <div key={key} className={`bg-white p-6 border rounded-[32px] shadow-sm hover:shadow-md transition-all ${((mealPlan[key]?.lunch && sentMeals.has(`${key}-lunch`)) || (mealPlan[key]?.dinner && sentMeals.has(`${key}-dinner`))) ? 'border-green-100 bg-green-50/10' : 'border-gray-100'}`}>
               <p className="text-center font-black text-sm uppercase tracking-widest text-purple-600 mb-4 border-b pb-2">
@@ -2321,7 +2351,7 @@ const Planning: React.FC<{
         
         {(() => {
           const sunday = days[6];
-          const key = sunday.toISOString().split('T')[0];
+          const key = formatDateKey(sunday);
           return (
             <>
               {/* Viennoiserie Card */}
@@ -2412,7 +2442,7 @@ const Planning: React.FC<{
 
             <div className="overflow-y-auto pr-2 custom-scrollbar space-y-6">
               {days.map(d => {
-                const dateStr = d.toISOString().split('T')[0];
+                const dateStr = formatDateKey(d);
                 const plan = mealPlan[dateStr];
                 if (!plan) return null;
 
@@ -2946,6 +2976,7 @@ const Settings: React.FC<{
   const [selectedFoodId, setSelectedFoodId] = useState<string>('');
   const [futureCategory, setFutureCategory] = useState<string>('none');
   const [showEditSuccessModal, setShowEditSuccessModal] = useState(false);
+  const [showResetAppModal, setShowResetAppModal] = useState(false);
   const [lastEditedFoodName, setLastEditedFoodName] = useState('');
   const [lastEditedCategoryName, setLastEditedCategoryName] = useState('');
   const [showAddFoodModal, setShowAddFoodModal] = useState(false);
@@ -2974,7 +3005,7 @@ const Settings: React.FC<{
     const weekDates = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(secoursBaseDate);
       d.setDate(secoursBaseDate.getDate() + i);
-      return d.toISOString().split('T')[0];
+      return formatDateKey(d);
     });
 
     setSentMeals(prev => {
@@ -3588,8 +3619,42 @@ const Settings: React.FC<{
       )}
       
       <div className="pt-8">
-        <button onClick={() => confirm('Effacer vos données ?') && (localStorage.clear(), window.location.reload())} className="w-full py-6 border-2 border-red-50 text-red-400 font-black rounded-[40px] hover:bg-red-50 transition-all">Réinitialiser l'application</button>
+        <button onClick={() => setShowResetAppModal(true)} className="w-full py-6 border-2 border-red-50 text-red-400 font-black rounded-[40px] hover:bg-red-50 transition-all">Réinitialiser l'application</button>
       </div>
+
+      {/* MODAL CONFIRMATION RÉINITIALISATION APPLI */}
+      {showResetAppModal && (
+        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-md flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white rounded-[40px] p-10 max-w-md w-full shadow-2xl space-y-8 animate-scaleUp text-center">
+            <div className="w-20 h-20 bg-red-100 rounded-3xl flex items-center justify-center text-red-600 mx-auto text-3xl">
+              ⚠️
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-2xl font-black text-gray-900 tracking-tight">Réinitialiser l'application ?</h3>
+              <p className="text-gray-500 font-medium leading-relaxed">
+                Êtes-vous sûr de vouloir effacer toutes vos données (recettes, planning, réserves et réglages) ? Cette action est irréversible.
+              </p>
+            </div>
+            <div className="flex gap-4 pt-2">
+              <button 
+                onClick={() => setShowResetAppModal(false)} 
+                className="flex-1 p-5 bg-gray-100 text-gray-500 rounded-2xl font-black hover:bg-gray-200 transition-all active:scale-95"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={() => {
+                  localStorage.clear();
+                  window.location.reload();
+                }} 
+                className="flex-1 p-5 bg-red-600 text-white rounded-2xl font-black shadow-lg shadow-red-200 hover:bg-red-700 transition-all active:scale-95"
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL AJOUT ALIMENT */}
       {showAddFoodModal && (
