@@ -3,5 +3,8 @@
   "description": "Application de gestion de recettes, planification de repas et listes de courses avec export Excel.",
   "requestFramePermissions": [
     "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }

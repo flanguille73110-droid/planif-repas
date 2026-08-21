@@ -22,6 +22,8 @@ export interface MealPlanDay {
   dinner?: { recipe1?: string; recipe2?: string };
   viennoiseries?: (string | undefined)[];
   sauces?: (string | undefined)[];
+  dietLunch?: { protein?: string; vegetable?: string; starch?: string; dessert?: string; dietRecipe?: string; servings?: number };
+  dietDinner?: { protein?: string; vegetable?: string; starch?: string; dessert?: string; dietRecipe?: string; servings?: number };
 }
 
 export interface ShoppingListItem {
@@ -44,6 +46,13 @@ export interface UserSettings {
   foodPortions: FoodPortion[];
   startDay?: number;
   defaultWeek?: 'current' | 'next';
+  defaultRecipesTab?: 'recipes' | 'regime';
+  defaultPlanningTab?: 'recipes' | 'regime';
+  dietServingsDefault?: number;
+  dietLunchCustomServings?: number;
+  dietLunchCustomDays?: number[];
+  dietDinnerCustomServings?: number;
+  dietDinnerCustomDays?: number[];
 }
 
 export interface FoodPortion {
@@ -52,4 +61,27 @@ export interface FoodPortion {
   unit: string;
   category: string;
   amount: number;
+}
+
+export type DietCategory = 'Protéines' | 'Légumes' | 'Féculents' | 'Desserts';
+
+export interface DietItem {
+  id: string;
+  name: string;
+  category: DietCategory;
+  weight: string;
+}
+
+export interface DietRecipeItem {
+  name: string;
+  weight: string;
+  category?: string;
+}
+
+export interface DietRecipe {
+  id: string;
+  name: string;
+  ingredients: string;
+  servings: number;
+  items?: DietRecipeItem[];
 }
