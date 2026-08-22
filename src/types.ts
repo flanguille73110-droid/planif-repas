@@ -53,6 +53,9 @@ export interface UserSettings {
   dietLunchCustomDays?: number[];
   dietDinnerCustomServings?: number;
   dietDinnerCustomDays?: number[];
+  dietServingsDefaultColor?: string;
+  dietLunchCustomColor?: string;
+  dietDinnerCustomColor?: string;
 }
 
 export interface FoodPortion {

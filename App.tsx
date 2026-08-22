@@ -158,6 +158,41 @@ const getDefaultDietServings = (
   }
 };
 
+const DIET_BADGE_COLORS: Record<string, { label: string; bg: string; text: string; border: string; circle: string }> = {
+  green: { label: 'Vert', bg: 'bg-green-100/90', text: 'text-green-950', border: 'border-green-300', circle: 'bg-green-500' },
+  blue: { label: 'Bleu', bg: 'bg-blue-100/90', text: 'text-blue-950', border: 'border-blue-300', circle: 'bg-blue-500' },
+  purple: { label: 'Violet', bg: 'bg-purple-100/90', text: 'text-purple-950', border: 'border-purple-300', circle: 'bg-purple-500' },
+  orange: { label: 'Orange', bg: 'bg-orange-100/90', text: 'text-orange-950', border: 'border-orange-300', circle: 'bg-orange-500' },
+  pink: { label: 'Rose', bg: 'bg-pink-100/90', text: 'text-pink-950', border: 'border-pink-300', circle: 'bg-pink-500' },
+  yellow: { label: 'Jaune', bg: 'bg-amber-100/90', text: 'text-amber-950', border: 'border-amber-300', circle: 'bg-amber-500' },
+  red: { label: 'Rouge', bg: 'bg-red-100/90', text: 'text-red-950', border: 'border-red-300', circle: 'bg-red-500' },
+  gray: { label: 'Gris', bg: 'bg-gray-200/90', text: 'text-gray-950', border: 'border-gray-300', circle: 'bg-gray-500' },
+};
+
+const getDietBadgeColor = (
+  dateInput: string | Date,
+  mealType: 'lunch' | 'dinner',
+  settings?: UserSettings
+): { bg: string; text: string; border: string } => {
+  const dayOfWeek = getDayOfWeekFromDateOrString(dateInput);
+  let colorKey = settings?.dietServingsDefaultColor || 'green';
+
+  if (mealType === 'lunch') {
+    const customDays = settings?.dietLunchCustomDays ?? [1, 2, 3, 4, 5];
+    if (customDays.includes(dayOfWeek)) {
+      colorKey = settings?.dietLunchCustomColor || 'green';
+    }
+  } else {
+    const customDays = settings?.dietDinnerCustomDays ?? [];
+    if (customDays.includes(dayOfWeek)) {
+      colorKey = settings?.dietDinnerCustomColor || 'green';
+    }
+  }
+
+  const style = DIET_BADGE_COLORS[colorKey] || DIET_BADGE_COLORS.green;
+  return { bg: style.bg, text: style.text, border: style.border };
+};
+
 const scaleTextQuantity = (text: string, servings: number, baseServings: number = 2.5): string => {
   if (!text || typeof text !== 'string') return typeof text === 'number' ? String(text) : '';
   if (!baseServings || servings === baseServings) return text;
@@ -460,7 +495,10 @@ export default function App() {
       dietLunchCustomServings: 1,
       dietLunchCustomDays: [1, 2, 3, 4, 5],
       dietDinnerCustomServings: 2.5,
-      dietDinnerCustomDays: []
+      dietDinnerCustomDays: [],
+      dietServingsDefaultColor: 'green',
+      dietLunchCustomColor: 'green',
+      dietDinnerCustomColor: 'green'
     };
     
     if (!saved) return defaultSettings;
@@ -475,6 +513,9 @@ export default function App() {
         dietLunchCustomDays: parsed.dietLunchCustomDays ?? defaultSettings.dietLunchCustomDays,
         dietDinnerCustomServings: parsed.dietDinnerCustomServings ?? defaultSettings.dietDinnerCustomServings,
         dietDinnerCustomDays: parsed.dietDinnerCustomDays ?? defaultSettings.dietDinnerCustomDays,
+        dietServingsDefaultColor: parsed.dietServingsDefaultColor ?? 'green',
+        dietLunchCustomColor: parsed.dietLunchCustomColor ?? 'green',
+        dietDinnerCustomColor: parsed.dietDinnerCustomColor ?? 'green',
         foodPortions: parsed.foodPortions || defaultSettings.foodPortions
       };
     } catch (e) {
@@ -7981,6 +8022,8 @@ const Planning: React.FC<{
 
                 const lunchSummary = getDietMealItems('dietLunch');
                 const dinnerSummary = getDietMealItems('dietDinner');
+                const lunchBadgeColor = getDietBadgeColor(d, 'lunch', settings);
+                const dinnerBadgeColor = getDietBadgeColor(d, 'dinner', settings);
 
                 return (
                   <div key={key} className="grid grid-cols-1 md:grid-cols-[140px_1fr_1fr] gap-4 p-4 border border-gray-100 rounded-2xl bg-white hover:bg-gray-50/40 transition-all shadow-2xs items-start">
@@ -7997,14 +8040,14 @@ const Planning: React.FC<{
                           <span className="text-xs font-black text-purple-700 uppercase tracking-wider">
                             Déjeuner
                           </span>
-                          <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-purple-200 shadow-2xs">
-                            <span className="text-[11px] font-black text-purple-700 whitespace-nowrap flex items-center gap-1">
+                          <div className={`flex items-center gap-1.5 ${lunchBadgeColor.bg} px-2.5 py-1 rounded-xl border ${lunchBadgeColor.border} shadow-2xs`}>
+                            <span className={`text-[11px] font-black ${lunchBadgeColor.text} whitespace-nowrap flex items-center gap-1`}>
                               <span>👥</span> <span>Pers. :</span>
                             </span>
                             <select
                               value={dayPlan.dietLunch?.servings ?? getDefaultDietServings(d, 'lunch', settings)}
                               onChange={(e) => updateDietMealPlan(key, 'lunch', 'servings', parseFloat(e.target.value))}
-                              className="bg-transparent font-black text-xs text-purple-900 outline-none cursor-pointer"
+                              className={`bg-transparent font-black text-xs ${lunchBadgeColor.text} outline-none cursor-pointer`}
                             >
                               {DIET_PERSON_OPTIONS.map(val => (
                                 <option key={val} value={val}>
@@ -8064,14 +8107,14 @@ const Planning: React.FC<{
                           <span className="text-xs font-black text-purple-700 uppercase tracking-wider">
                             Dîner
                           </span>
-                          <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-purple-200 shadow-2xs">
-                            <span className="text-[11px] font-black text-purple-700 whitespace-nowrap flex items-center gap-1">
+                          <div className={`flex items-center gap-1.5 ${dinnerBadgeColor.bg} px-2.5 py-1 rounded-xl border ${dinnerBadgeColor.border} shadow-2xs`}>
+                            <span className={`text-[11px] font-black ${dinnerBadgeColor.text} whitespace-nowrap flex items-center gap-1`}>
                               <span>👥</span> <span>Pers. :</span>
                             </span>
                             <select
                               value={dayPlan.dietDinner?.servings ?? getDefaultDietServings(d, 'dinner', settings)}
                               onChange={(e) => updateDietMealPlan(key, 'dinner', 'servings', parseFloat(e.target.value))}
-                              className="bg-transparent font-black text-xs text-purple-900 outline-none cursor-pointer"
+                              className={`bg-transparent font-black text-xs ${dinnerBadgeColor.text} outline-none cursor-pointer`}
                             >
                               {DIET_PERSON_OPTIONS.map(val => (
                                 <option key={val} value={val}>
@@ -9690,6 +9733,29 @@ const Settings: React.FC<{
                     ))}
                   </select>
                 </div>
+                
+                <div className="bg-white p-3.5 border border-gray-100 rounded-2xl shadow-2xs space-y-2">
+                  <span className="text-xs font-black text-gray-600 block">
+                    🎨 Couleur du fond du badge "👥 Pers." (par défaut) :
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {Object.entries(DIET_BADGE_COLORS).map(([key, c]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSettings(prev => ({ ...prev, dietServingsDefaultColor: key }))}
+                        className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 border cursor-pointer transition-all ${
+                          (settings.dietServingsDefaultColor || 'green') === key
+                            ? `${c.bg} ${c.text} ${c.border} ring-2 ring-purple-500 shadow-2xs scale-105`
+                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span className={`w-3 h-3 rounded-full ${c.circle}`}></span>
+                        <span>{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* 2. Sélection des jours déjeuner pour changer le nombre de personnes par défaut */}
@@ -9715,6 +9781,29 @@ const Settings: React.FC<{
                   </select>
                 </div>
                 
+                <div className="bg-white p-3.5 border border-gray-100 rounded-2xl shadow-2xs space-y-2">
+                  <span className="text-xs font-black text-gray-600 block">
+                    🎨 Couleur du fond du badge "👥 Pers." (jours Déjeuner sélectionnés) :
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {Object.entries(DIET_BADGE_COLORS).map(([key, c]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSettings(prev => ({ ...prev, dietLunchCustomColor: key }))}
+                        className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 border cursor-pointer transition-all ${
+                          (settings.dietLunchCustomColor || 'green') === key
+                            ? `${c.bg} ${c.text} ${c.border} ring-2 ring-purple-500 shadow-2xs scale-105`
+                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span className={`w-3 h-3 rounded-full ${c.circle}`}></span>
+                        <span>{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
                   <p className="text-xs font-black text-gray-600 uppercase tracking-wider">
                     Jours de la semaine :
@@ -9775,6 +9864,29 @@ const Settings: React.FC<{
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="bg-white p-3.5 border border-gray-100 rounded-2xl shadow-2xs space-y-2">
+                  <span className="text-xs font-black text-gray-600 block">
+                    🎨 Couleur du fond du badge "👥 Pers." (jours Dîner sélectionnés) :
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {Object.entries(DIET_BADGE_COLORS).map(([key, c]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSettings(prev => ({ ...prev, dietDinnerCustomColor: key }))}
+                        className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 border cursor-pointer transition-all ${
+                          (settings.dietDinnerCustomColor || 'green') === key
+                            ? `${c.bg} ${c.text} ${c.border} ring-2 ring-purple-500 shadow-2xs scale-105`
+                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span className={`w-3 h-3 rounded-full ${c.circle}`}></span>
+                        <span>{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
