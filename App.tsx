@@ -358,11 +358,12 @@ export default function App() {
   });
 
   const [showReviewNewFoodsModal, setShowReviewNewFoodsModal] = useState(false);
-  const [pendingNewFoodsToReview, setPendingNewFoodsToReview] = useState<{name: string, category?: string, weight?: string}[]>([]);
+  const [pendingNewFoodsToReview, setPendingNewFoodsToReview] = useState<{name: string, category?: string, settingsCategory?: string, weight?: string}[]>([]);
   const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
   const [selectedMatchMode, setSelectedMatchMode] = useState<string>('__NEW__');
   const [reviewedReplacements, setReviewedReplacements] = useState<Record<string, string>>({});
   const [reviewedNewFoods, setReviewedNewFoods] = useState<{name: string, dietCat: string, setCat: string, weight?: string}[]>([]);
+  const [reviewedDietItemsToAdd, setReviewedDietItemsToAdd] = useState<{name: string, dietCat: string, weight?: string}[]>([]);
   const [reviewDietCat, setReviewDietCat] = useState<DietCategory>('Légumes');
   const [reviewSetCat, setReviewSetCat] = useState<string>('');
   const [pendingDietRecipes, setPendingDietRecipes] = useState<DietRecipe[]>([]);
@@ -1001,6 +1002,7 @@ export default function App() {
       return {
         "Aliments": item.name,
         "Poids": item.weight || "100 g",
+        "Personnes": 2.5,
         "Catégorie (Régime)": item.category || "Protéines",
         "Catégorie (Réglages)": settingsPortion?.category || item.category || "Protéines"
       };
@@ -1038,25 +1040,58 @@ export default function App() {
           return;
         }
 
-        let addedToDietCount = 0;
-        let addedToSettingsCount = 0;
-
         const itemsToImport = data.map((row: any) => {
           const keys = Object.keys(row);
           // Colonne A: Aliments
           const rawName = row["Aliments"] || row["aliments"] || row["ALIMENTS"] || row["Aliment"] || row["aliment"] || (keys[0] ? row[keys[0]] : "");
           // Colonne B: Poids
           const rawWeight = row["Poids"] || row["poids"] || row["POIDS"] || (keys[1] ? row[keys[1]] : "") || "100 g";
-          // Colonne C: Catégorie (Régime)
-          const rawDietCategory = row["Catégorie (Régime)"] || row["Catégorie (Régime)"] || row["Categorie (Regime)"] || row["Catégorie Régime"] || row["Catégories"] || row["Catégorie"] || row["catégorie"] || (keys[2] ? row[keys[2]] : "") || "Protéines";
-          // Colonne D: Catégorie (Réglages)
-          const rawSettingsCategory = row["Catégorie (Réglages)"] || row["Catégorie (Réglages)"] || row["Categorie (Reglages)"] || row["Catégorie Réglages"] || row["Catégories (Réglages)"] || (keys[3] ? row[keys[3]] : "") || rawDietCategory || "Protéines";
+          
+          // Colonne Personnes:
+          const personsValue = row["Personnes"] || row["personnes"] || row["PERSONNES"] || row["Personne"] || row["personne"] || row["Nb personnes"] || row["Nombre de personnes"] || row["Nb Personnes"] || row["Nombre de Personnes"];
+          let parsedPersons = 2.5;
+          if (personsValue !== undefined && personsValue !== null && personsValue !== "") {
+            const p = parseFloat(String(personsValue).replace(',', '.'));
+            if (!isNaN(p) && p > 0) {
+              parsedPersons = p;
+            }
+          }
+
+          const strWeight = rawWeight ? String(rawWeight).trim() : "100 g";
+          const normalizedWeight = parsedPersons !== 2.5 ? scaleTextQuantity(strWeight, 2.5, parsedPersons) : strWeight;
+
+          // Colonne C / D: Catégories
+          const rawDietCategory = row["Catégorie (Régime)"] || row["Categorie (Regime)"] || row["Catégorie Régime"] || row["Catégories"] || row["Catégorie"] || row["catégorie"];
+          let finalDietCategory = rawDietCategory;
+          if (!finalDietCategory) {
+            const dietKey = keys.find(k => /régime|regime/i.test(k));
+            if (dietKey) {
+              finalDietCategory = row[dietKey];
+            } else if (personsValue !== undefined) {
+              finalDietCategory = keys[3] ? row[keys[3]] : "";
+            } else {
+              finalDietCategory = keys[2] ? row[keys[2]] : "";
+            }
+          }
+
+          const rawSettingsCategory = row["Catégorie (Réglages)"] || row["Categorie (Reglages)"] || row["Catégorie Réglages"] || row["Catégories (Réglages)"];
+          let finalSettingsCategory = rawSettingsCategory;
+          if (!finalSettingsCategory) {
+            const setKey = keys.find(k => /réglages|reglages/i.test(k));
+            if (setKey) {
+              finalSettingsCategory = row[setKey];
+            } else if (personsValue !== undefined) {
+              finalSettingsCategory = keys[4] ? row[keys[4]] : "";
+            } else {
+              finalSettingsCategory = keys[3] ? row[keys[3]] : "";
+            }
+          }
 
           return {
             name: rawName ? String(rawName).trim() : "",
-            weight: rawWeight ? String(rawWeight).trim() : "100 g",
-            dietCategory: rawDietCategory ? String(rawDietCategory).trim() : "Protéines",
-            settingsCategory: rawSettingsCategory ? String(rawSettingsCategory).trim() : "Protéines"
+            weight: normalizedWeight || "100 g",
+            dietCategory: finalDietCategory ? String(finalDietCategory).trim() : "Protéines",
+            settingsCategory: finalSettingsCategory ? String(finalSettingsCategory).trim() : (finalDietCategory ? String(finalDietCategory).trim() : "Protéines")
           };
         }).filter(item => item.name.length > 0);
 
@@ -1065,68 +1100,45 @@ export default function App() {
           return;
         }
 
-        // 1. Recettes, Régime: prends les colonnes A, B, C (nom, poids, catégorie régime)
-        // Ne doit pas écraser si l'aliment existe déjà
-        setDietItems(prevDiet => {
-          const updatedDiet = [...prevDiet];
-          const existingNames = new Set(prevDiet.map(i => i.name.trim().toLowerCase()));
+        const existingNamesInDiet = new Set(dietItems.map(d => d.name.trim().toLowerCase()));
+        const existingNamesInSettings = new Set((settings.foodPortions || []).map(p => p.name.trim().toLowerCase()));
 
-          itemsToImport.forEach(item => {
-            const normName = item.name.toLowerCase();
-            if (!existingNames.has(normName)) {
-              existingNames.add(normName);
-              updatedDiet.push({
-                id: Math.random().toString(36).substr(2, 9),
-                name: item.name,
-                category: (item.dietCategory as DietCategory) || 'Protéines',
-                weight: item.weight || '100 g'
-              });
-              addedToDietCount++;
-            }
-          });
+        const itemsToReview = itemsToImport
+          .filter(item => {
+            const normName = item.name.trim().toLowerCase();
+            const inDiet = existingNamesInDiet.has(normName);
+            const inSettings = existingNamesInSettings.has(normName);
+            // Règle 1 : Présent dans les 2 listes -> Ignorer (rien ne se passe, évite les doublons)
+            // Règle 2 & 3 : Absent de 1 ou des 2 listes -> À valider via le modal
+            return !(inDiet && inSettings);
+          })
+          .map(item => ({
+            name: item.name,
+            category: item.dietCategory,
+            settingsCategory: item.settingsCategory,
+            weight: item.weight
+          }));
 
-          return updatedDiet;
-        });
+        if (itemsToReview.length > 0) {
+          setPendingDietRecipes([]);
+          setPendingNewFoodsToReview(itemsToReview);
+          setCurrentReviewIndex(0);
+          setSelectedMatchMode('__NEW__');
+          setReviewedReplacements({});
+          setReviewedNewFoods([]);
+          setReviewedDietItemsToAdd([]);
 
-        // 2. Réglages, Aliments: prends les colonnes A, D (nom, catégorie réglages)
-        // Ne doit pas écraser si l'aliment existe déjà
-        setSettings(prevSettings => {
-          const currentPortions = prevSettings.foodPortions || [];
-          const updatedPortions = [...currentPortions];
-          const existingFoodNames = new Set(currentPortions.map(f => f.name.trim().toLowerCase()));
-          const currentCategories = prevSettings.foodCategories || FOOD_CATEGORIES;
-          const updatedCategories = [...currentCategories];
+          const firstFood = itemsToReview[0];
+          const defaultDietCats = ['Protéines', 'Légumes', 'Féculents', 'Desserts'];
+          setReviewDietCat((firstFood.category && defaultDietCats.includes(firstFood.category)) ? firstFood.category as DietCategory : 'Légumes');
 
-          itemsToImport.forEach(item => {
-            const normName = item.name.toLowerCase();
-            const cat = item.settingsCategory || 'Protéines';
+          const availableSettingsCategories = settings.foodCategories || [];
+          setReviewSetCat((firstFood.settingsCategory && availableSettingsCategories.includes(firstFood.settingsCategory)) ? firstFood.settingsCategory : (availableSettingsCategories.length > 0 ? availableSettingsCategories[0] : 'Légumes'));
 
-            if (!existingFoodNames.has(normName)) {
-              existingFoodNames.add(normName);
-
-              if (cat && !updatedCategories.includes(cat)) {
-                updatedCategories.push(cat);
-              }
-
-              updatedPortions.push({
-                id: Math.random().toString(36).substr(2, 9),
-                name: item.name,
-                amount: 1,
-                unit: 'g',
-                category: cat
-              });
-              addedToSettingsCount++;
-            }
-          });
-
-          return {
-            ...prevSettings,
-            foodCategories: updatedCategories,
-            foodPortions: updatedPortions.sort((a, b) => a.name.localeCompare(b.name))
-          };
-        });
-
-        alert(`Import des aliments (Excel) réussi !\n- ${addedToDietCount} nouvel(s) aliment(s) ajouté(s) à la page Régime.\n- ${addedToSettingsCount} nouvel(s) aliment(s) ajouté(s) à la page Réglages > Aliments.`);
+          setShowReviewNewFoodsModal(true);
+        } else {
+          alert("Tous les aliments de ce fichier Excel sont déjà présents dans vos 2 listes (Recettes Régime et Réglages Aliments).");
+        }
       } catch (err) {
         alert("Erreur lors de l'importation du fichier Excel.");
       }
@@ -1473,6 +1485,7 @@ export default function App() {
         const handleConfirmCurrent = () => {
           const updatedReplacements = { ...reviewedReplacements };
           const updatedNewFoods = [...reviewedNewFoods];
+          const updatedDietItemsToAdd = [...reviewedDietItemsToAdd];
 
           if (isNewSelected) {
             updatedNewFoods.push({
@@ -1482,10 +1495,21 @@ export default function App() {
               setCat: reviewSetCat
             });
             setReviewedNewFoods(updatedNewFoods);
+            updatedDietItemsToAdd.push({
+              name: currentFood.name,
+              weight: currentFood.weight,
+              dietCat: reviewDietCat
+            });
           } else {
             updatedReplacements[currentFood.name] = selectedMatchMode;
             setReviewedReplacements(updatedReplacements);
+            updatedDietItemsToAdd.push({
+              name: selectedMatchMode,
+              weight: currentFood.weight,
+              dietCat: reviewDietCat
+            });
           }
+          setReviewedDietItemsToAdd(updatedDietItemsToAdd);
 
           if (currentReviewIndex + 1 < pendingNewFoodsToReview.length) {
             const nextIdx = currentReviewIndex + 1;
@@ -1524,17 +1548,17 @@ export default function App() {
               return updatedRecipe;
             });
 
-            // 2. Add new foods
-            if (updatedNewFoods.length > 0) {
+            // 2. Add/register all reviewed diet items (both new & mapped from settings) into dietItems (Recettes > Catégories Régime)
+            if (updatedDietItemsToAdd.length > 0) {
               setDietItems(prevDiet => {
                 const currentDietNames = new Set(prevDiet.map(d => d.name.trim().toLowerCase()));
                 const toAdd: DietItem[] = [];
-                updatedNewFoods.forEach(ex => {
-                  const nLow = ex.name.toLowerCase();
+                updatedDietItemsToAdd.forEach(ex => {
+                  const nLow = ex.name.trim().toLowerCase();
                   if (!currentDietNames.has(nLow)) {
                     toAdd.push({
                       id: Math.random().toString(36).substr(2, 9),
-                      name: ex.name,
+                      name: ex.name.trim(),
                       category: ex.dietCat as DietCategory,
                       weight: ex.weight || ''
                     });
@@ -1543,7 +1567,10 @@ export default function App() {
                 });
                 return toAdd.length > 0 ? [...prevDiet, ...toAdd] : prevDiet;
               });
+            }
 
+            // 3. Add new foods to Settings > Aliments
+            if (updatedNewFoods.length > 0) {
               setSettings(prevSet => {
                 const currentPortions = prevSet.foodPortions || [];
                 const currentCategories = prevSet.foodCategories || [];
@@ -1552,11 +1579,11 @@ export default function App() {
                 let newCategories = [...currentCategories];
                 
                 updatedNewFoods.forEach(ex => {
-                  const nLow = ex.name.toLowerCase();
+                  const nLow = ex.name.trim().toLowerCase();
                   if (!newPortions.some(p => p.name.trim().toLowerCase() === nLow)) {
                     newPortions.push({
                       id: Math.random().toString(36).substr(2, 9),
-                      name: ex.name,
+                      name: ex.name.trim(),
                       amount: 1,
                       unit: 'g',
                       category: ex.setCat
@@ -1572,7 +1599,7 @@ export default function App() {
               });
             }
 
-            // 3. Save recipes
+            // 4. Save recipes
             setDietRecipes(prev => [...prev, ...finalRecipes]);
             setShowReviewNewFoodsModal(false);
             setPendingNewFoodsToReview([]);
@@ -1581,10 +1608,17 @@ export default function App() {
             setSelectedMatchMode('__NEW__');
             setReviewedReplacements({});
             setReviewedNewFoods([]);
+            setReviewedDietItemsToAdd([]);
 
             const replacedCount = Object.keys(updatedReplacements).length;
             const newCreatedCount = updatedNewFoods.length;
-            alert(`Importation réussie !\n${finalRecipes.length} recette(s) régime ajoutée(s).\n${newCreatedCount} nouvel(aux) aliment(s) créé(s).\n${replacedCount} aliment(s) harmonisé(s) avec vos aliments existants.`);
+            const totalAddedDiet = updatedDietItemsToAdd.length;
+
+            if (pendingDietRecipes.length > 0) {
+              alert(`Importation réussie !\n- ${finalRecipes.length} recette(s) régime ajoutée(s).\n- ${totalAddedDiet} aliment(s) enregistré(s) dans Recettes > Catégories Régime.\n- ${newCreatedCount} nouvel(aux) aliment(s) créé(s) dans Réglages > Aliments.`);
+            } else {
+              alert(`Importation des aliments régime réussie !\n- ${totalAddedDiet} aliment(s) enregistré(s) dans Recettes > Catégories Régime.\n- ${newCreatedCount} nouvel(aux) aliment(s) créé(s) dans Réglages > Aliments.`);
+            }
           }
         };
 
@@ -1596,6 +1630,7 @@ export default function App() {
           setSelectedMatchMode('__NEW__');
           setReviewedReplacements({});
           setReviewedNewFoods([]);
+          setReviewedDietItemsToAdd([]);
         };
 
         return (
@@ -1615,7 +1650,7 @@ export default function App() {
                 {/* Box aliment détecté */}
                 <div className="bg-gray-50 rounded-2xl p-4 mb-5 text-left border border-gray-200/80 shadow-2xs">
                   <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-1">
-                    Aliment dans la recette importée :
+                    Aliment à valider :
                   </p>
                   <p className="text-xl font-black text-purple-800 flex items-center gap-2 flex-wrap">
                     <span>🥗</span>
@@ -1638,7 +1673,11 @@ export default function App() {
                     {/* Option 1: Nouveau */}
                     <button
                       type="button"
-                      onClick={() => setSelectedMatchMode('__NEW__')}
+                      onClick={() => {
+                        setSelectedMatchMode('__NEW__');
+                        const defaultDietCats = ['Protéines', 'Légumes', 'Féculents', 'Desserts'];
+                        setReviewDietCat((currentFood.category && defaultDietCats.includes(currentFood.category)) ? currentFood.category as DietCategory : 'Légumes');
+                      }}
                       className={`w-full text-left p-3.5 rounded-2xl border-2 transition-all flex items-center justify-between cursor-pointer ${
                         isNewSelected
                           ? 'border-purple-600 bg-purple-50/80 text-purple-950 shadow-sm'
@@ -1676,7 +1715,13 @@ export default function App() {
                               <button
                                 key={sug}
                                 type="button"
-                                onClick={() => setSelectedMatchMode(sug)}
+                                onClick={() => {
+                                  setSelectedMatchMode(sug);
+                                  const bestCat = resolveDietFoodCategory(sug, currentFood.category, dietItems, settings.foodPortions);
+                                  if (bestCat && ['Protéines', 'Légumes', 'Féculents', 'Desserts'].includes(bestCat)) {
+                                    setReviewDietCat(bestCat as DietCategory);
+                                  }
+                                }}
                                 className={`w-full text-left p-3 rounded-2xl border-2 transition-all flex items-center justify-between cursor-pointer ${
                                   isSugSelected
                                     ? 'border-purple-600 bg-purple-50/80 text-purple-950 shadow-sm'
@@ -1715,7 +1760,12 @@ export default function App() {
                         value={!isNewSelected && !similarSuggestions.includes(selectedMatchMode) ? selectedMatchMode : ''}
                         onChange={(e) => {
                           if (e.target.value) {
-                            setSelectedMatchMode(e.target.value);
+                            const val = e.target.value;
+                            setSelectedMatchMode(val);
+                            const bestCat = resolveDietFoodCategory(val, currentFood.category, dietItems, settings.foodPortions);
+                            if (bestCat && ['Protéines', 'Légumes', 'Féculents', 'Desserts'].includes(bestCat)) {
+                              setReviewDietCat(bestCat as DietCategory);
+                            }
                           }
                         }}
                         className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-3.5 py-2.5 font-bold text-xs text-gray-800 outline-none focus:ring-2 focus:ring-purple-300"
@@ -1728,7 +1778,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Si "Nouveau" est sélectionné : afficher les sélecteurs de catégories */}
+                  {/* Choix des catégories : Nouveau vs Existant */}
                   {isNewSelected ? (
                     <div className="bg-purple-50/60 p-4 rounded-2xl border border-purple-100 space-y-3 mt-3 animate-fadeIn">
                       <p className="text-xs font-black text-purple-900 flex items-center gap-1.5">
@@ -1768,11 +1818,36 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-green-50 p-3.5 rounded-2xl border border-green-200 flex items-center gap-2.5 text-green-900 text-xs font-bold animate-fadeIn">
-                      <span className="text-base">✅</span>
-                      <span>
-                        La recette sera importée en remplaçant <strong>« {currentFood.name} »</strong> par <strong>« {selectedMatchMode} »</strong>.
-                      </span>
+                    <div className="space-y-3 mt-3 animate-fadeIn">
+                      <div className="bg-green-50 p-3.5 rounded-2xl border border-green-200 flex items-center gap-2.5 text-green-900 text-xs font-bold">
+                        <span className="text-base">✅</span>
+                        <span>
+                          La recette sera importée en remplaçant <strong>« {currentFood.name} »</strong> par <strong>« {selectedMatchMode} »</strong>.
+                        </span>
+                      </div>
+
+                      <div className="bg-purple-50/60 p-4 rounded-2xl border border-purple-100 space-y-3">
+                        <p className="text-xs font-black text-purple-900 flex items-center gap-1.5">
+                          <span>🏷️</span>
+                          <span>Catégorie Régime pour l'aliment « {selectedMatchMode} » :</span>
+                        </p>
+
+                        <div>
+                          <label className="block text-[11px] font-black text-gray-700 mb-1 uppercase tracking-wider pl-1">
+                            Catégorie Régime (Colonnes)
+                          </label>
+                          <select
+                            value={reviewDietCat}
+                            onChange={(e) => setReviewDietCat(e.target.value as DietCategory)}
+                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 font-bold text-xs text-gray-800 outline-none focus:ring-2 focus:ring-purple-300"
+                          >
+                            <option value="Protéines">Protéines</option>
+                            <option value="Légumes">Légumes</option>
+                            <option value="Féculents">Féculents</option>
+                            <option value="Desserts">Desserts</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2943,7 +3018,7 @@ const RecipeBook: React.FC<{
                 <div className="col-span-1"></div>
               </div>
 
-              <div className="divide-y divide-red-50 max-h-[520px] overflow-y-auto">
+              <div className="divide-y divide-red-50">
                 {proteins.map(item => (
                   <div key={item.id} className="grid grid-cols-12 px-5 py-3.5 items-center hover:bg-red-50/40 transition-colors group">
                     <div className="col-span-7 font-bold text-gray-800 text-sm truncate pr-2" title={item.name}>
@@ -3024,7 +3099,7 @@ const RecipeBook: React.FC<{
                 <div className="col-span-1"></div>
               </div>
 
-              <div className="divide-y divide-green-50 max-h-[520px] overflow-y-auto">
+              <div className="divide-y divide-green-50">
                 {vegetables.map(item => (
                   <div key={item.id} className="grid grid-cols-12 px-5 py-3.5 items-center hover:bg-green-50/40 transition-colors group">
                     <div className="col-span-7 font-bold text-gray-800 text-sm truncate pr-2" title={item.name}>
@@ -3105,7 +3180,7 @@ const RecipeBook: React.FC<{
                 <div className="col-span-1"></div>
               </div>
 
-              <div className="divide-y divide-amber-50 max-h-[520px] overflow-y-auto">
+              <div className="divide-y divide-amber-50">
                 {starches.map(item => (
                   <div key={item.id} className="grid grid-cols-12 px-5 py-3.5 items-center hover:bg-amber-50/50 transition-colors group">
                     <div className="col-span-7 font-bold text-gray-800 text-sm truncate pr-2" title={item.name}>
@@ -3186,7 +3261,7 @@ const RecipeBook: React.FC<{
                 <div className="col-span-1"></div>
               </div>
 
-              <div className="divide-y divide-pink-50 max-h-[520px] overflow-y-auto">
+              <div className="divide-y divide-pink-50">
                 {desserts.map(item => (
                   <div key={item.id} className="grid grid-cols-12 px-5 py-3.5 items-center hover:bg-pink-50/50 transition-colors group">
                     <div className="col-span-7 font-bold text-gray-800 text-sm truncate pr-2" title={item.name}>
