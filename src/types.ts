@@ -44,6 +44,9 @@ export interface UserSettings {
   dietaryRestrictions: string[];
   foodCategories: string[];
   foodPortions: FoodPortion[];
+  customWeightUnits?: string[];
+  customPortionUnits?: string[];
+  portionUnitsList?: string[];
   startDay?: number;
   defaultWeek?: 'current' | 'next';
   defaultRecipesTab?: 'recipes' | 'regime';
@@ -56,6 +59,18 @@ export interface UserSettings {
   dietServingsDefaultColor?: string;
   dietLunchCustomColor?: string;
   dietDinnerCustomColor?: string;
+  dietRoundDiscreteUnits?: boolean;
+  dietRoundingMode?: 'nearest' | 'ceil';
+  dietRoundingUnits?: string[];
+}
+
+export interface PortionRule {
+  id?: string;
+  baseAmount: number;
+  baseUnit: string;
+  purchaseAmount: number;
+  purchaseUnit: string;
+  minThreshold?: number;
 }
 
 export interface FoodPortion {
@@ -64,6 +79,11 @@ export interface FoodPortion {
   unit: string;
   category: string;
   amount: number;
+  baseAmount?: number;
+  baseUnit?: string;
+  purchaseAmount?: number;
+  purchaseUnit?: string;
+  rules?: PortionRule[];
 }
 
 export type DietCategory = 'Protéines' | 'Légumes' | 'Féculents' | 'Desserts';
@@ -73,6 +93,7 @@ export interface DietItem {
   name: string;
   category: DietCategory;
   weight: string;
+  roundWeight?: boolean;
 }
 
 export interface DietRecipeItem {

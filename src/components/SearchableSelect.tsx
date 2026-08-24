@@ -6,9 +6,10 @@ interface SearchableSelectProps {
   onChange: (value: string | undefined) => void;
   placeholder?: string;
   selectedClassName?: string;
+  buttonClassName?: string;
 }
 
-export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, value, onChange, placeholder, selectedClassName }) => {
+export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, value, onChange, placeholder, selectedClassName, buttonClassName }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -45,7 +46,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
     <div className="relative w-full" ref={wrapperRef}>
       <button
         type="button"
-        className="w-full bg-white border border-gray-200 rounded-xl p-3 text-left flex items-center justify-between"
+        className={`w-full border rounded-xl p-3 text-left flex items-center justify-between transition-all ${buttonClassName || 'bg-white border-gray-200'}`}
         onClick={() => setIsOpen(!isOpen)}
       >
         <span className={`truncate ${value && selectedClassName ? selectedClassName : ''}`}>

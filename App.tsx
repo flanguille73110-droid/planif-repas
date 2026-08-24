@@ -1,6 +1,6 @@
 import { SearchableSelect } from './src/components/SearchableSelect';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Recipe, MealPlanDay, ShoppingListItem, AppTab, UserSettings, Ingredient, FoodPortion, DietItem, DietCategory, DietRecipe, DietRecipeItem } from './src/types';
+import { Recipe, MealPlanDay, ShoppingListItem, AppTab, UserSettings, Ingredient, FoodPortion, PortionRule, DietItem, DietCategory, DietRecipe, DietRecipeItem } from './src/types';
 import { CATEGORIES, DIETARY_OPTIONS, FOOD_CATEGORIES } from './constants';
 
 // Extend ICONS
@@ -49,6 +49,207 @@ const EXT_ICONS = {
   )
 };
 
+export const MASTER_RECIPE_UNITS = [
+  'boite(s)',
+  'c.à.c',
+  'c.à.s',
+  'cl',
+  'cuillère(s)',
+  'g',
+  'kg',
+  'l',
+  'ml',
+  'œufs',
+  'pièce(s)',
+  'pincée(s)',
+  'portion(s)',
+  'pot(s)',
+  'tranche(s)'
+];
+
+export const MASTER_PORTION_UNITS = [
+  'barquette(s)',
+  'bocal(aux)',
+  'boîte(s)',
+  'boite(s)',
+  'bouteille(s)',
+  'brique(s)',
+  'cl',
+  'filet(s)',
+  'g',
+  'kg',
+  'l',
+  'ml',
+  'œufs',
+  'pack(s)',
+  'paquet(s)',
+  'pièce(s)',
+  'plaquette(s)',
+  'plateau(x)',
+  'portion(s)',
+  'pot(s)',
+  'sachet(s)',
+  'tranche(s)'
+];
+
+export const MASTER_UNITS = MASTER_RECIPE_UNITS;
+
+export const getAvailableRecipeUnits = (settings?: UserSettings): string[] => {
+  const custom = settings?.customWeightUnits || [];
+  const combined = [...MASTER_RECIPE_UNITS, ...custom];
+  const seen = new Set<string>();
+  const res: string[] = [];
+  for (const u of combined) {
+    if (u && typeof u === 'string' && u.trim() && !seen.has(u.trim())) {
+      seen.add(u.trim());
+      res.push(u.trim());
+    }
+  }
+  res.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  return res;
+};
+
+export const getAvailablePortionUnits = (settings?: UserSettings): string[] => {
+  if (settings?.portionUnitsList && settings.portionUnitsList.length > 0) {
+    const seen = new Set<string>();
+    const res: string[] = [];
+    for (const u of settings.portionUnitsList) {
+      if (u && typeof u === 'string' && u.trim() && !seen.has(u.trim())) {
+        seen.add(u.trim());
+        res.push(u.trim());
+      }
+    }
+    res.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+    return res;
+  }
+  const custom = settings?.customPortionUnits || [];
+  const combined = [...MASTER_PORTION_UNITS, ...custom];
+  const seen = new Set<string>();
+  const res: string[] = [];
+  for (const u of combined) {
+    if (u && typeof u === 'string' && u.trim() && !seen.has(u.trim())) {
+      seen.add(u.trim());
+      res.push(u.trim());
+    }
+  }
+  res.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  return res;
+};
+
+export const getAvailableUnits = (settings?: UserSettings): string[] => {
+  return getAvailableRecipeUnits(settings);
+};
+
+export const DEFAULT_DIET_ROUNDING_UNITS: string[] = ['pot(s)', 'pièce(s)'];
+
+export const getRoundingUnitsList = (settings?: UserSettings): string[] => {
+  const portionUnits = getAvailablePortionUnits(settings);
+  const recipeUnits = getAvailableRecipeUnits(settings);
+  const combined = Array.from(new Set([
+    'pot(s)',
+    'pièce(s)',
+    'œufs',
+    'tranche(s)',
+    'portion(s)',
+    'sachet(s)',
+    'boîte(s)',
+    'barquette(s)',
+    'bouteille(s)',
+    'brique(s)',
+    'pack(s)',
+    'paquet(s)',
+    'plaquette(s)',
+    'plateau(x)',
+    'bocal(aux)',
+    'filet(s)',
+    'gousse(s)',
+    'capsule(s)',
+    'pain(s)',
+    'tablette(s)',
+    'rouleau(x)',
+    ...portionUnits,
+    ...recipeUnits,
+    ...MASTER_PORTION_UNITS,
+    ...MASTER_RECIPE_UNITS
+  ]));
+  combined.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  return combined;
+};
+
+export const parseWeightAndUnit = (rawWeight: string = '', customUnits: string[] = []): { value: string; unit: string } => {
+  if (!rawWeight || !rawWeight.trim()) return { value: '100', unit: 'g' };
+  const trimmed = rawWeight.trim();
+  const match = trimmed.match(/^([0-9]+(?:[.,][0-9]+)?)\s*(.*)$/);
+  if (match) {
+    const val = match[1].replace(',', '.');
+    let rawUnit = match[2]?.trim() || 'g';
+    const allUnits = Array.from(new Set([...MASTER_UNITS, ...customUnits]));
+    const foundUnit = allUnits.find(u => 
+      u.toLowerCase() === rawUnit.toLowerCase() || 
+      u.toLowerCase().startsWith(rawUnit.toLowerCase()) ||
+      (rawUnit.toLowerCase().startsWith('pi') && u.includes('pièce')) ||
+      (rawUnit.toLowerCase().startsWith('port') && u.includes('portion')) ||
+      (rawUnit.toLowerCase().startsWith('c') && u.includes('c.à'))
+    ) || rawUnit || 'g';
+    return { value: val, unit: foundUnit };
+  }
+  return { value: '100', unit: 'g' };
+};
+
+export const UNIT_CONVERSIONS: Record<string, { dimension: 'mass' | 'volume'; factorToBase: number }> = {
+  // Masse (base = g)
+  'g': { dimension: 'mass', factorToBase: 1 },
+  'gr': { dimension: 'mass', factorToBase: 1 },
+  'gramme': { dimension: 'mass', factorToBase: 1 },
+  'grammes': { dimension: 'mass', factorToBase: 1 },
+  'kg': { dimension: 'mass', factorToBase: 1000 },
+  'kilo': { dimension: 'mass', factorToBase: 1000 },
+  'kilos': { dimension: 'mass', factorToBase: 1000 },
+  'kilogramme': { dimension: 'mass', factorToBase: 1000 },
+  'kilogrammes': { dimension: 'mass', factorToBase: 1000 },
+  'mg': { dimension: 'mass', factorToBase: 0.001 },
+  'milligramme': { dimension: 'mass', factorToBase: 0.001 },
+  'milligrammes': { dimension: 'mass', factorToBase: 0.001 },
+
+  // Volume (base = ml)
+  'ml': { dimension: 'volume', factorToBase: 1 },
+  'millilitre': { dimension: 'volume', factorToBase: 1 },
+  'millilitres': { dimension: 'volume', factorToBase: 1 },
+  'cl': { dimension: 'volume', factorToBase: 10 },
+  'centilitre': { dimension: 'volume', factorToBase: 10 },
+  'centilitres': { dimension: 'volume', factorToBase: 10 },
+  'dl': { dimension: 'volume', factorToBase: 100 },
+  'decilitre': { dimension: 'volume', factorToBase: 100 },
+  'décilitre': { dimension: 'volume', factorToBase: 100 },
+  'decilitres': { dimension: 'volume', factorToBase: 100 },
+  'décilitres': { dimension: 'volume', factorToBase: 100 },
+  'l': { dimension: 'volume', factorToBase: 1000 },
+  'litre': { dimension: 'volume', factorToBase: 1000 },
+  'litres': { dimension: 'volume', factorToBase: 1000 },
+};
+
+export const getUnitDimension = (unit: string): { dimension: 'mass' | 'volume'; factorToBase: number } | null => {
+  if (!unit) return null;
+  const clean = unit.trim().toLowerCase().replace(/\./g, '');
+  return UNIT_CONVERSIONS[clean] || null;
+};
+
+export const convertUnitAmount = (amount: number, fromUnit: string, toUnit: string): number | null => {
+  if (isNaN(amount)) return null;
+  const normFrom = fromUnit.trim().toLowerCase().replace(/\./g, '');
+  const normTo = toUnit.trim().toLowerCase().replace(/\./g, '');
+  if (normFrom === normTo) return amount;
+
+  const fromInfo = UNIT_CONVERSIONS[normFrom];
+  const toInfo = UNIT_CONVERSIONS[normTo];
+
+  if (fromInfo && toInfo && fromInfo.dimension === toInfo.dimension) {
+    const baseValue = amount * fromInfo.factorToBase;
+    return baseValue / toInfo.factorToBase;
+  }
+  return null;
+};
+
 interface PantryGroup {
   id: string;
   name: string;
@@ -69,6 +270,16 @@ const formatDateKey = (d: Date): string => {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+const getStartOfWeek = (date: Date, startDay: number = 6): Date => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = (day - startDay + 7) % 7;
+  const startOfWeek = new Date(d);
+  startOfWeek.setDate(d.getDate() - diff);
+  startOfWeek.setHours(0, 0, 0, 0);
+  return startOfWeek;
 };
 
 const DEFAULT_DIET_ITEMS: DietItem[] = [
@@ -193,32 +404,106 @@ const getDietBadgeColor = (
   return { bg: style.bg, text: style.text, border: style.border };
 };
 
-const scaleTextQuantity = (text: string, servings: number, baseServings: number = 2.5): string => {
-  if (!text || typeof text !== 'string') return typeof text === 'number' ? String(text) : '';
-  if (!baseServings || servings === baseServings) return text;
-  const ratio = servings / baseServings;
+const roundShoppingAmount = (amount: number, unit?: string): number => {
+  if (isNaN(amount) || amount <= 0) return amount;
+  const u = (unit || '').toLowerCase().trim();
+  // Uniquement pour les unités de poids et volume: g, kg, ml, cl
+  if (u === 'g' || u === 'grammes' || u === 'gr' || u === 'g.' || u === 'ml' || u === 'cl') {
+    return Math.ceil(amount / 5) * 5;
+  }
+  if (u === 'kg' || u === 'kilo' || u === 'kilos' || u === 'kg.') {
+    // Si en kg et avec décimales, on peut soit convertir en g -> multiple de 5 -> rediviser par 1000, 
+    // ou si c'est un montant décimal de kg, ex: 0.122 kg -> 0.125 kg (multiple de 0.005 kg = 5g)
+    const inGrams = amount * 1000;
+    const roundedGrams = Math.ceil(inGrams / 5) * 5;
+    return Math.round((roundedGrams / 1000) * 10000) / 10000;
+  }
+  if (!Number.isInteger(amount)) {
+    return Math.round(amount * 100) / 100;
+  }
+  return amount;
+};
 
-  return text.replace(/([0-9]+(?:[.,][0-9]+)?)/g, (match) => {
-    const num = parseFloat(match.replace(',', '.'));
-    if (isNaN(num)) return match;
-    const scaled = num * ratio;
-    const rounded = Math.round(scaled * 10) / 10;
-    return Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1).replace('.0', '');
+const isUnitInRoundingList = (unitStr?: string, allowedUnits: string[] = DEFAULT_DIET_ROUNDING_UNITS): boolean => {
+  if (!unitStr) return false;
+  const clean = unitStr.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return allowedUnits.some(allowed => {
+    const cleanAllowed = allowed.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (clean === cleanAllowed) return true;
+    const baseStem = cleanAllowed.replace(/\(s\)|\(x\)/g, '').replace(/s$|x$/g, '').trim();
+    const unitStem = clean.replace(/\(s\)|\(x\)/g, '').replace(/s$|x$/g, '').trim();
+    if (unitStem && baseStem && (unitStem === baseStem || clean.startsWith(baseStem) || cleanAllowed.startsWith(unitStem))) {
+      return true;
+    }
+    return false;
   });
 };
 
-const formatScaledWeight = (rawWeight: string, servings: number, baseServings: number = 2.5): string => {
+const isDiscreteDietUnit = (unitStr?: string, settings?: UserSettings): boolean => {
+  const allowed = settings?.dietRoundingUnits && settings.dietRoundingUnits.length > 0
+    ? settings.dietRoundingUnits
+    : DEFAULT_DIET_ROUNDING_UNITS;
+  return isUnitInRoundingList(unitStr, allowed);
+};
+
+const roundDiscreteAmount = (val: number, mode: 'nearest' | 'ceil' = 'nearest'): number => {
+  if (mode === 'ceil') {
+    return Math.ceil(val);
+  }
+  return Math.round(val);
+};
+
+const scaleTextQuantity = (text: string, servings: number, baseServings: number = 2.5, settings?: UserSettings, roundWeightItem?: boolean): string => {
+  if (!text || typeof text !== 'string') return typeof text === 'number' ? String(text) : '';
+  if (!baseServings || servings === baseServings) return text;
+  const ratio = servings / baseServings;
+  const roundDiscrete = settings ? (settings.dietRoundDiscreteUnits ?? true) : true;
+  const roundingMode = settings?.dietRoundingMode || 'nearest';
+  const allowedUnits = settings?.dietRoundingUnits && settings.dietRoundingUnits.length > 0
+    ? settings.dietRoundingUnits
+    : DEFAULT_DIET_ROUNDING_UNITS;
+  const shouldRoundThisItem = roundWeightItem !== false;
+
+  // Pattern pour détecter un nombre suivi de son unité textuelle (ex: "3 pots", "2 pièces", "150 g")
+  return text.replace(/([0-9]+(?:[.,][0-9]+)?)\s*([a-zA-ZÀ-ÿ().\s]+)?/g, (fullMatch, numPart, unitPart) => {
+    const num = parseFloat(numPart.replace(',', '.'));
+    if (isNaN(num)) return fullMatch;
+    const scaled = num * ratio;
+    const unitTrimmed = (unitPart || '').trim();
+
+    if (roundDiscrete && shouldRoundThisItem && unitTrimmed && isUnitInRoundingList(unitTrimmed, allowedUnits)) {
+      const roundedVal = roundDiscreteAmount(scaled, roundingMode);
+      return unitPart ? `${roundedVal} ${unitTrimmed}` : `${roundedVal}`;
+    }
+
+    const rounded = Math.round(scaled * 10) / 10;
+    const formatted = Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1).replace('.0', '');
+    return unitPart ? `${formatted} ${unitTrimmed}` : `${formatted}`;
+  });
+};
+
+const formatScaledWeight = (rawWeight: string, servings: number, baseServings: number = 2.5, settings?: UserSettings, roundWeightItem?: boolean): string => {
   if (!rawWeight) return '';
   if (servings === baseServings) return rawWeight;
   const ratio = servings / baseServings;
+  const roundDiscrete = settings ? (settings.dietRoundDiscreteUnits ?? true) : true;
+  const roundingMode = settings?.dietRoundingMode || 'nearest';
+  const allowedUnits = settings?.dietRoundingUnits && settings.dietRoundingUnits.length > 0
+    ? settings.dietRoundingUnits
+    : DEFAULT_DIET_ROUNDING_UNITS;
+  const shouldRoundThisItem = roundWeightItem !== false;
 
   const match = rawWeight.trim().match(/^([0-9]+(?:[.,][0-9]+)?)\s*(.*)$/);
   if (match) {
     const numStr = match[1].replace(',', '.');
     const num = parseFloat(numStr);
-    const unit = match[2];
+    const unit = match[2]?.trim() || '';
     if (!isNaN(num)) {
       const scaled = num * ratio;
+      if (roundDiscrete && shouldRoundThisItem && unit && isUnitInRoundingList(unit, allowedUnits)) {
+        const roundedVal = roundDiscreteAmount(scaled, roundingMode);
+        return unit ? `${roundedVal} ${unit}`.trim() : `${roundedVal}`;
+      }
       const rounded = Math.round(scaled * 10) / 10;
       const formatted = Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1).replace('.0', '');
       return unit ? `${formatted} ${unit}`.trim() : `${formatted}`;
@@ -370,11 +655,86 @@ const resolveDietFoodCategory = (
 
   // 4. Keyword heuristics
   if (/poulet|boeuf|bœuf|veau|porc|dinde|jambon|poisson|saumon|thon|cabillaud|colin|oeuf|œuf|tofu|steak|viande|crevette|canard|bacon|saucisse|dinde|lard|protéine|proteine|merlu|lieu|hareng|maquereau|sardine|haché|hache|cordon bleu|nugget|agneau/i.test(cleanName)) return 'Protéines';
-  if (/haricot|courgette|tomate|carotte|brocoli|salade|épinard|epinard|poivron|champignon|poireau|chou|concombre|aubergine|oignon|ail|échalote|echalote|radis|navet|céleri|celeri|betterave|avocat|asperge|poireaux|épinards|epinards|légume|legume|petits pois|artichaut|mâche|mache|roquette|endive|citrouille|potiron|butternut|courge/i.test(cleanName)) return 'Légumes';
-  if (/riz|pâte|pate|coquillette|spaghetti|penne|tagliatelle|pomme de terre|patate|quinoa|boulgour|semoule|pain|lentille|pois chiche|avoine|fécule|fecule|blé|ble|maïs|mais|gnocchi|polenta|féculent|feculent|patates|nouille|vermicelle/i.test(cleanName)) return 'Féculents';
-  if (/yaourt|fromage blanc|compote|pomme|banane|fruit|dessert|fraise|kiwi|orange|poire|pêche|peche|abricot|framboise|mûre|myrtille|cerise|ananas|mangue|melon|pastèque|pasteque|raisin|crème|creme|flan|chocolat|mousse|gâteau|gateau|tarte|sorbet|glace/i.test(cleanName)) return 'Desserts';
+  if (/haricot|courgette|tomate|carotte|brocoli|salade|épinard|epinard|poivron|champignon|poireau|poireaux|chou|concombre|aubergine|oignon|ail|échalote|echalote|radis|navet|céleri|celeri|betterave|avocat|asperge|épinards|epinards|légume|legume|petits pois|artichaut|mâche|mache|roquette|endive|citrouille|potiron|butternut|courge/i.test(cleanName)) return 'Légumes';
+  if (/riz|pâte|pate|coquillette|spaghetti|penne|tagliatelle|pomme de terre|pommes de terre|patate|patates|quinoa|boulgour|semoule|pain|lentille|pois chiche|avoine|fécule|fecule|blé|ble|maïs|mais|gnocchi|polenta|féculent|feculent|nouille|vermicelle/i.test(cleanName)) return 'Féculents';
+  if (/yaourt|fromage blanc|compote|\bpommes?\b(?! de terre)|\bpoires?\b|banane|fruit|dessert|fraise|kiwi|orange|pêche|peche|abricot|framboise|mûre|myrtille|cerise|ananas|mangue|melon|pastèque|pasteque|raisin|crème|creme|flan|chocolat|mousse|gâteau|gateau|tarte|sorbet|glace/i.test(cleanName)) return 'Desserts';
 
   return 'Autre';
+};
+
+const detectSettingsCategoryFromFoodName = (
+  foodName: string,
+  dietCat?: string
+): string => {
+  const cleanName = (foodName || '').trim().toLowerCase();
+  if (!cleanName) return 'Épicerie salées';
+
+  if (dietCat) {
+    const normDiet = dietCat.trim().toLowerCase();
+    if (normDiet.includes('légume') || normDiet.includes('legume')) return 'Fruit et légumes';
+    if (normDiet.includes('protéine') || normDiet.includes('proteine')) return 'Viandes et poissons';
+    if (normDiet.includes('féculent') || normDiet.includes('feculent')) return 'Épicerie salées';
+    if (normDiet.includes('dessert')) {
+      if (/pomme|banane|fraise|kiwi|orange|poire|pêche|peche|abricot|framboise|mûre|myrtille|cerise|ananas|mangue|melon|pastèque|pasteque|raisin|fruit|citron|prune|figue/i.test(cleanName)) {
+        return 'Fruit et légumes';
+      }
+      return 'Yaourts';
+    }
+  }
+
+  if (/salade|tomate|carotte|courgette|haricot|brocoli|épinard|epinard|poivron|champignon|poireau|chou|concombre|aubergine|oignon|ail|échalote|echalote|radis|navet|céleri|celeri|betterave|avocat|asperge|poireaux|épinards|epinards|petits pois|artichaut|mâche|mache|roquette|endive|citrouille|potiron|butternut|courge|pomme|banane|fraise|kiwi|orange|poire|pêche|peche|abricot|framboise|mûre|myrtille|cerise|ananas|mangue|melon|pastèque|pasteque|raisin|fruit|citron|prune|figue|pamplemousse|clémentine|clementine|mandarine/i.test(cleanName)) {
+    return 'Fruit et légumes';
+  }
+
+  if (/poulet|boeuf|bœuf|veau|porc|dinde|poisson|saumon|thon|cabillaud|colin|oeuf|œuf|tofu|steak|viande|crevette|canard|bacon|saucisse|merlu|lieu|hareng|maquereau|sardine|haché|hache|cordon bleu|nugget|agneau|escalope|filet|entrecôte|rôti|roti|pâté|pate|boucherie/i.test(cleanName)) {
+    return 'Viandes et poissons';
+  }
+
+  if (/jambon|salami|chorizo|rosette|coppa|bacon|pâté|pate|rillettes|mortadelle|andouille|saucisson/i.test(cleanName)) {
+    return 'Charcuterie';
+  }
+
+  if (/quiche|pizza|lasagne|traiteur|sandwich|wrap|taboulé|taboule/i.test(cleanName)) {
+    return 'Traiteurs';
+  }
+
+  if (/pain|baguette|brioche|croissant|pain de mie|biscotte|ficelle|boule/i.test(cleanName)) {
+    return 'Pain';
+  }
+
+  if (/yaourt|skyr|fromage blanc|petits suisse|petit suisse|flan|mousse|liégeois|liegeois/i.test(cleanName)) {
+    return 'Yaourts';
+  }
+
+  if (/fromage|emmental|comté|comte|camembert|chèvre|chevre|mozzarella|parmesan|gruyère|gruyere|roquefort|brie|raclette|reblochon|feta/i.test(cleanName)) {
+    return 'Fromage';
+  }
+
+  if (/lait|beurre|crème|creme|oeuf|œuf|margarine|crèmerie|cremerie/i.test(cleanName)) {
+    return 'Crèmerie et œufs';
+  }
+
+  if (/surgelé|surgele|glace|sorbet|bâtonnet/i.test(cleanName)) {
+    return 'Surgelés';
+  }
+
+  if (/chocolat|sucre|gâteau|gateau|biscuit|miel|confiture|bonbon|compote|céréales|cereales|pâte à tartiner|pate a tartiner/i.test(cleanName)) {
+    return 'Épicerie Sucrées';
+  }
+
+  if (/soda|eau|jus|café|cafe|thé|the|bière|biere|vin|coca|sprite|fanta|boisson|sirop|icetea|oasis/i.test(cleanName)) {
+    return 'Boissons';
+  }
+
+  if (/savon|lessive|papier|dentifrice|shampoing|éponge|eponge|nettoyant|javel|essuie-tout/i.test(cleanName)) {
+    return 'Hygiène et entretien';
+  }
+
+  if (/riz|pâte|pate|semoule|quinoa|boulgour|lentille|pois chiche|farine|huile|vinaigre|sel|poivre|épice|epice|sauce|bouillon|conserve|boîte|boite|maïzena|maizena/i.test(cleanName)) {
+    return 'Épicerie salées';
+  }
+
+  return 'Épicerie salées';
 };
 
 // --- Main App ---
@@ -393,14 +753,17 @@ export default function App() {
   });
 
   const [showReviewNewFoodsModal, setShowReviewNewFoodsModal] = useState(false);
-  const [pendingNewFoodsToReview, setPendingNewFoodsToReview] = useState<{name: string, category?: string, settingsCategory?: string, weight?: string}[]>([]);
+  const [pendingNewFoodsToReview, setPendingNewFoodsToReview] = useState<{name: string, category?: string, settingsCategory?: string, weight?: string, recipeName?: string}[]>([]);
   const [currentReviewIndex, setCurrentReviewIndex] = useState(0);
   const [selectedMatchMode, setSelectedMatchMode] = useState<string>('__NEW__');
   const [reviewedReplacements, setReviewedReplacements] = useState<Record<string, string>>({});
+  const [reviewedWeightOverrides, setReviewedWeightOverrides] = useState<Record<string, string>>({});
   const [reviewedNewFoods, setReviewedNewFoods] = useState<{name: string, dietCat: string, setCat: string, weight?: string}[]>([]);
   const [reviewedDietItemsToAdd, setReviewedDietItemsToAdd] = useState<{name: string, dietCat: string, weight?: string}[]>([]);
   const [reviewDietCat, setReviewDietCat] = useState<DietCategory>('Légumes');
   const [reviewSetCat, setReviewSetCat] = useState<string>('');
+  const [reviewWeightValue, setReviewWeightValue] = useState<string>('100');
+  const [reviewWeightUnit, setReviewWeightUnit] = useState<string>('g');
   const [pendingDietRecipes, setPendingDietRecipes] = useState<DietRecipe[]>([]);
 
   const [dietItems, setDietItems] = useState<DietItem[]>(() => {
@@ -413,6 +776,34 @@ export default function App() {
       return [];
     }
   });
+
+  useEffect(() => {
+    if (showReviewNewFoodsModal && pendingNewFoodsToReview.length > 0 && currentReviewIndex < pendingNewFoodsToReview.length) {
+      const food = pendingNewFoodsToReview[currentReviewIndex];
+      if (selectedMatchMode === '__NEW__') {
+        const parsed = parseWeightAndUnit(food.weight || '');
+        setReviewWeightValue(parsed.value);
+        setReviewWeightUnit(parsed.unit);
+      } else {
+        const existing = dietItems.find(d => d.name.toLowerCase() === selectedMatchMode.toLowerCase());
+        if (existing && existing.weight) {
+          const existingParsed = parseWeightAndUnit(existing.weight);
+          const importedParsed = parseWeightAndUnit(food.weight || '');
+          if (existingParsed.unit.toLowerCase() !== importedParsed.unit.toLowerCase()) {
+            setReviewWeightValue(existingParsed.value);
+            setReviewWeightUnit(existingParsed.unit);
+          } else {
+            setReviewWeightValue(importedParsed.value);
+            setReviewWeightUnit(importedParsed.unit);
+          }
+        } else {
+          const parsed = parseWeightAndUnit(food.weight || '');
+          setReviewWeightValue(parsed.value);
+          setReviewWeightUnit(parsed.unit);
+        }
+      }
+    }
+  }, [showReviewNewFoodsModal, currentReviewIndex, selectedMatchMode, dietItems, pendingNewFoodsToReview]);
 
   const [pantryGroups, setPantryGroups] = useState<PantryGroup[]>(() => {
     const saved = localStorage.getItem('culina_pantry_v3');
@@ -466,7 +857,22 @@ export default function App() {
         { id: '22', name: 'Chèvre', amount: 1, unit: 'g', category: 'Fromage' },
         { id: '23', name: 'Lait', amount: 1, unit: 'g', category: 'Crèmerie et œufs' },
         { id: '24', name: 'Beurre', amount: 1, unit: 'g', category: 'Crèmerie et œufs' },
-        { id: '25', name: 'Œufs', amount: 1, unit: 'g', category: 'Crèmerie et œufs' },
+        { 
+          id: '25', 
+          name: 'Œufs', 
+          amount: 6, 
+          unit: 'pièce(s)', 
+          category: 'Crèmerie et œufs',
+          baseAmount: 6,
+          baseUnit: 'pièce(s)',
+          purchaseAmount: 1,
+          purchaseUnit: 'boîte(s)',
+          rules: [
+            { id: 'oeuf-1', baseAmount: 6, baseUnit: 'pièce(s)', purchaseAmount: 1, purchaseUnit: 'boîte(s)', minThreshold: 1 },
+            { id: 'oeuf-2', baseAmount: 20, baseUnit: 'pièce(s)', purchaseAmount: 1, purchaseUnit: 'plaquette(s) de 20', minThreshold: 19 },
+            { id: 'oeuf-3', baseAmount: 30, baseUnit: 'pièce(s)', purchaseAmount: 1, purchaseUnit: 'plaquette(s) de 30', minThreshold: 27 },
+          ]
+        },
         { id: '26', name: 'Crème fraîche', amount: 1, unit: 'g', category: 'Crèmerie et œufs' },
         { id: '27', name: 'Frites', amount: 1, unit: 'g', category: 'Surgelés' },
         { id: '28', name: 'Petits pois', amount: 1, unit: 'g', category: 'Surgelés' },
@@ -498,7 +904,10 @@ export default function App() {
       dietDinnerCustomDays: [],
       dietServingsDefaultColor: 'green',
       dietLunchCustomColor: 'green',
-      dietDinnerCustomColor: 'green'
+      dietDinnerCustomColor: 'green',
+      dietRoundDiscreteUnits: true,
+      dietRoundingMode: 'nearest',
+      dietRoundingUnits: DEFAULT_DIET_ROUNDING_UNITS
     };
     
     if (!saved) return defaultSettings;
@@ -516,6 +925,9 @@ export default function App() {
         dietServingsDefaultColor: parsed.dietServingsDefaultColor ?? 'green',
         dietLunchCustomColor: parsed.dietLunchCustomColor ?? 'green',
         dietDinnerCustomColor: parsed.dietDinnerCustomColor ?? 'green',
+        dietRoundDiscreteUnits: parsed.dietRoundDiscreteUnits ?? true,
+        dietRoundingMode: parsed.dietRoundingMode ?? 'nearest',
+        dietRoundingUnits: Array.isArray(parsed.dietRoundingUnits) ? parsed.dietRoundingUnits : DEFAULT_DIET_ROUNDING_UNITS,
         foodPortions: parsed.foodPortions || defaultSettings.foodPortions
       };
     } catch (e) {
@@ -538,6 +950,78 @@ export default function App() {
     }
     return [];
   });
+
+  const [unclassifiedFoodsQueue, setUnclassifiedFoodsQueue] = useState<{ id: string; name: string; unit: string; category: string }[]>([]);
+  const [showUnclassifiedFoodsModal, setShowUnclassifiedFoodsModal] = useState(false);
+
+  const checkAndPromptMissingFoodPortions = useCallback((items: { name: string; unit?: string; category?: string }[], customPortions?: FoodPortion[]) => {
+    const portions = customPortions || settings.foodPortions || [];
+    const missingItems: { id: string; name: string; unit: string; category: string }[] = [];
+    const seen = new Set<string>();
+
+    items.forEach(item => {
+      const trimmed = (item.name || '').trim();
+      if (!trimmed) return;
+      const norm = trimmed.toLowerCase();
+      if (seen.has(norm)) return;
+      seen.add(norm);
+
+      const exists = portions.some(p => p.name.trim().toLowerCase() === norm);
+      if (!exists) {
+        const guessedCat = item.category || detectSettingsCategoryFromFoodName(trimmed);
+        const parsedUnit = item.unit ? parseWeightAndUnit(`1 ${item.unit}`).unit : 'g';
+        missingItems.push({
+          id: Math.random().toString(36).substr(2, 9),
+          name: trimmed,
+          unit: parsedUnit,
+          category: guessedCat
+        });
+      }
+    });
+
+    if (missingItems.length > 0) {
+      setUnclassifiedFoodsQueue(missingItems);
+      setShowUnclassifiedFoodsModal(true);
+    }
+  }, [settings.foodPortions]);
+
+  const handleSaveUnclassifiedFoods = () => {
+    setSettings(prev => {
+      const currentPortions = prev.foodPortions || [];
+      const currentCategories = prev.foodCategories || FOOD_CATEGORIES;
+      const newPortions = [...currentPortions];
+      const newCategories = [...currentCategories];
+
+      unclassifiedFoodsQueue.forEach(item => {
+        const norm = item.name.trim().toLowerCase();
+        if (!newPortions.some(p => p.name.trim().toLowerCase() === norm)) {
+          newPortions.push({
+            id: Math.random().toString(36).substr(2, 9),
+            name: item.name.trim(),
+            amount: 1,
+            unit: item.unit || 'g',
+            category: item.category || 'Épicerie',
+            baseAmount: 1,
+            baseUnit: 'portion(s)',
+            purchaseAmount: 1,
+            purchaseUnit: 'pièce(s)'
+          });
+          if (item.category && !newCategories.includes(item.category)) {
+            newCategories.push(item.category);
+          }
+        }
+      });
+
+      return {
+        ...prev,
+        foodPortions: newPortions,
+        foodCategories: newCategories
+      };
+    });
+
+    setShowUnclassifiedFoodsModal(false);
+    setUnclassifiedFoodsQueue([]);
+  };
 
   const [showQuickBackupModal, setShowQuickBackupModal] = useState(false);
 
@@ -622,32 +1106,61 @@ export default function App() {
         }
       };
     });
-    if (slot !== 'servings') {
-      const mealKey = `${date}-${mealType === 'lunch' ? 'dietLunch' : 'dietDinner'}-${slot}`;
-      if (sentMeals.has(mealKey)) {
-        const next = new Set(sentMeals);
-        next.delete(mealKey);
-        setSentMeals(next);
-      }
-    }
+
+    const targetKey = mealType === 'lunch' ? 'dietLunch' : 'dietDinner';
+    setSentMeals(prev => {
+      const wholeMealKey = `${date}-${targetKey}`;
+      const slotKey = `${date}-${targetKey}-${slot}`;
+      const hasAny = prev.has(wholeMealKey) || prev.has(slotKey) || 
+        prev.has(`${date}-${targetKey}-protein`) || 
+        prev.has(`${date}-${targetKey}-vegetable`) || 
+        prev.has(`${date}-${targetKey}-starch`) || 
+        prev.has(`${date}-${targetKey}-dessert`) || 
+        prev.has(`${date}-${targetKey}-dietRecipe`);
+      if (!hasAny) return prev;
+
+      const next = new Set(prev);
+      next.delete(wholeMealKey);
+      next.delete(slotKey);
+      next.delete(`${date}-${targetKey}-protein`);
+      next.delete(`${date}-${targetKey}-vegetable`);
+      next.delete(`${date}-${targetKey}-starch`);
+      next.delete(`${date}-${targetKey}-dessert`);
+      next.delete(`${date}-${targetKey}-dietRecipe`);
+      return next;
+    });
   };
 
   const mergeToShoppingList = useCallback((newItems: ShoppingListItem[]) => {
     setShoppingList(currentList => {
       const updatedList = [...currentList];
       newItems.forEach(newItem => {
+        const roundedNewAmount = roundShoppingAmount(newItem.amount, newItem.unit);
         const existingIndex = updatedList.findIndex(
-          item => item.name.toLowerCase() === newItem.name.toLowerCase() && item.unit === newItem.unit
+          item => item.name.toLowerCase().trim() === newItem.name.toLowerCase().trim() && 
+            (item.unit.toLowerCase().trim() === newItem.unit.toLowerCase().trim() ||
+             convertUnitAmount(1, item.unit, newItem.unit) !== null)
         );
         if (existingIndex > -1 && !updatedList[existingIndex].checked) {
-          updatedList[existingIndex].amount += newItem.amount;
+          const targetUnit = updatedList[existingIndex].unit;
+          const convertedNewAmount = convertUnitAmount(roundedNewAmount, newItem.unit, targetUnit);
+          if (convertedNewAmount !== null) {
+            updatedList[existingIndex].amount = roundShoppingAmount(updatedList[existingIndex].amount + convertedNewAmount, targetUnit);
+          } else {
+            updatedList[existingIndex].amount = roundShoppingAmount(updatedList[existingIndex].amount + roundedNewAmount, targetUnit);
+          }
         } else {
-          updatedList.push(newItem);
+          updatedList.push({
+            ...newItem,
+            amount: roundedNewAmount
+          });
         }
       });
       return updatedList;
     });
-  }, []);
+
+    checkAndPromptMissingFoodPortions(newItems);
+  }, [checkAndPromptMissingFoodPortions]);
 
   const handleQuickAddFoodToSettings = (name: string, unit: string = 'g', category: string = 'Épicerie') => {
     setSettings(prev => {
@@ -667,7 +1180,11 @@ export default function App() {
         name: trimmedName,
         amount: 1,
         unit: unit,
-        category: category
+        category: category,
+        baseAmount: 1,
+        baseUnit: 'portion(s)',
+        purchaseAmount: 1,
+        purchaseUnit: 'pièce(s)'
       };
       return { ...prev, foodPortions: [...portions, newPortion] };
     });
@@ -678,15 +1195,25 @@ export default function App() {
     const data = {
       recipes,
       mealPlan,
-      settings,
+      settings: {
+        ...settings,
+        foodPortions: settings.foodPortions || [],
+        customWeightUnits: settings.customWeightUnits || [],
+        customPortionUnits: settings.customPortionUnits || [],
+        portionUnitsList: settings.portionUnitsList || []
+      },
       shoppingList,
       pantryGroups,
       reserveItems,
       sentMeals: Array.from(sentMeals),
       dietItems,
-      dietRecipes
+      dietRecipes,
+      foodPortions: settings.foodPortions || [],
+      customWeightUnits: settings.customWeightUnits || [],
+      customPortionUnits: settings.customPortionUnits || [],
+      portionUnitsList: settings.portionUnitsList || []
     };
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -703,7 +1230,6 @@ export default function App() {
         const data = JSON.parse(evt.target?.result as string);
         if (data.recipes) setRecipes(data.recipes);
         if (data.mealPlan) setMealPlan(data.mealPlan);
-        if (data.settings) setSettings(data.settings);
         if (data.shoppingList) setShoppingList(data.shoppingList);
         if (data.pantryGroups) setPantryGroups(data.pantryGroups);
         if (data.reserveItems) setReserveItems(data.reserveItems);
@@ -712,6 +1238,54 @@ export default function App() {
         if (data.sentMeals && Array.isArray(data.sentMeals)) {
           setSentMeals(new Set(data.sentMeals));
         }
+
+        const incomingSettings = data.settings || {};
+        const incomingFoodPortions = (Array.isArray(data.foodPortions) && data.foodPortions.length > 0)
+          ? data.foodPortions
+          : (Array.isArray(incomingSettings.foodPortions) ? incomingSettings.foodPortions : null);
+        const incomingCustomWeightUnits = Array.isArray(data.customWeightUnits)
+          ? data.customWeightUnits
+          : (Array.isArray(incomingSettings.customWeightUnits) ? incomingSettings.customWeightUnits : null);
+        const incomingCustomPortionUnits = Array.isArray(data.customPortionUnits)
+          ? data.customPortionUnits
+          : (Array.isArray(incomingSettings.customPortionUnits) ? incomingSettings.customPortionUnits : null);
+        const incomingPortionUnitsList = Array.isArray(data.portionUnitsList)
+          ? data.portionUnitsList
+          : (Array.isArray(incomingSettings.portionUnitsList) ? incomingSettings.portionUnitsList : null);
+
+        setSettings(prev => ({
+          ...prev,
+          ...incomingSettings,
+          foodPortions: incomingFoodPortions !== null ? incomingFoodPortions : (prev.foodPortions || []),
+          customWeightUnits: incomingCustomWeightUnits !== null ? incomingCustomWeightUnits : (prev.customWeightUnits || []),
+          customPortionUnits: incomingCustomPortionUnits !== null ? incomingCustomPortionUnits : (prev.customPortionUnits || []),
+          portionUnitsList: incomingPortionUnitsList !== null ? incomingPortionUnitsList : (prev.portionUnitsList || [])
+        }));
+
+        const importedFoods: { name: string; unit?: string; category?: string }[] = [];
+        if (Array.isArray(data.shoppingList)) {
+          data.shoppingList.forEach((i: any) => i.name && importedFoods.push({ name: i.name, unit: i.unit, category: i.category }));
+        }
+        if (Array.isArray(data.dietItems)) {
+          data.dietItems.forEach((i: any) => i.name && importedFoods.push({ name: i.name, category: i.settingsCategory || i.category }));
+        }
+        if (Array.isArray(data.recipes)) {
+          data.recipes.forEach((r: any) => {
+            if (Array.isArray(r.ingredients)) {
+              r.ingredients.forEach((ing: any) => ing.name && importedFoods.push({ name: ing.name, unit: ing.unit }));
+            }
+          });
+        }
+        if (Array.isArray(data.dietRecipes)) {
+          data.dietRecipes.forEach((r: any) => {
+            if (Array.isArray(r.items)) {
+              r.items.forEach((item: any) => item.name && importedFoods.push({ name: item.name, unit: item.unit, category: item.category }));
+            }
+          });
+        }
+        const targetPortions = incomingFoodPortions || data.foodPortions || data.settings?.foodPortions || settings.foodPortions;
+        checkAndPromptMissingFoodPortions(importedFoods, targetPortions);
+
         alert("Données importées avec succès !");
       } catch (err) { alert("Erreur lors de l'importation."); }
     };
@@ -821,53 +1395,80 @@ export default function App() {
         let currentDietItems = [...dietItems];
         let itemsAddedCount = 0;
 
-        const resolveDietItemId = (val?: string, categoryDefault: DietCategory = 'Protéines'): string | undefined => {
-          if (!val || typeof val !== 'string' || !val.trim()) return undefined;
-          const trimmed = val.trim();
-          
-          let found = currentDietItems.find(i => i.id === trimmed);
-          if (found) return found.id;
+        setSettings(prevSet => {
+          const currentPortions = prevSet.foodPortions || [];
+          const currentCategories = prevSet.foodCategories || FOOD_CATEGORIES;
+          let changed = false;
+          const newPortions = [...currentPortions];
+          let newCategories = [...currentCategories];
 
-          found = currentDietItems.find(i => i.name.toLowerCase() === trimmed.toLowerCase());
-          if (found) return found.id;
+          const resolveDietItemId = (val?: string, categoryDefault: DietCategory = 'Protéines'): string | undefined => {
+            if (!val || typeof val !== 'string' || !val.trim()) return undefined;
+            const trimmed = val.trim();
+            
+            let found = currentDietItems.find(i => i.id === trimmed);
+            if (found) return found.id;
 
-          const newId = Math.random().toString(36).substr(2, 9);
-          const newItem: DietItem = {
-            id: newId,
-            name: trimmed,
-            category: categoryDefault,
-            weight: '100 g'
+            found = currentDietItems.find(i => i.name.toLowerCase() === trimmed.toLowerCase());
+            if (found) return found.id;
+
+            const newId = Math.random().toString(36).substr(2, 9);
+            const newItem: DietItem = {
+              id: newId,
+              name: trimmed,
+              category: categoryDefault,
+              weight: '100 g'
+            };
+            currentDietItems.push(newItem);
+            itemsAddedCount++;
+
+            const norm = trimmed.toLowerCase();
+            if (!newPortions.some(p => p.name.trim().toLowerCase() === norm)) {
+              const cat = detectSettingsCategoryFromFoodName(trimmed, categoryDefault);
+              newPortions.push({
+                id: Math.random().toString(36).substr(2, 9),
+                name: trimmed,
+                amount: 1,
+                unit: 'g',
+                category: cat
+              });
+              if (!newCategories.includes(cat)) {
+                newCategories.push(cat);
+              }
+              changed = true;
+            }
+
+            return newId;
           };
-          currentDietItems.push(newItem);
-          itemsAddedCount++;
-          return newId;
-        };
 
-        Object.entries(sourceData).forEach(([dateStr, planObj]: [string, any]) => {
-          if (!planObj || typeof planObj !== 'object') return;
+          Object.entries(sourceData).forEach(([dateStr, planObj]: [string, any]) => {
+            if (!planObj || typeof planObj !== 'object') return;
 
-          const dietLunch = planObj.dietLunch || planObj.lunch;
-          const dietDinner = planObj.dietDinner || planObj.dinner;
+            const dietLunch = planObj.dietLunch || planObj.lunch;
+            const dietDinner = planObj.dietDinner || planObj.dinner;
 
-          const newLunch = dietLunch ? {
-            protein: resolveDietItemId(dietLunch.protein, 'Protéines'),
-            vegetable: resolveDietItemId(dietLunch.vegetable, 'Légumes'),
-            starch: resolveDietItemId(dietLunch.starch, 'Féculents'),
-            dessert: resolveDietItemId(dietLunch.dessert, 'Desserts')
-          } : undefined;
+            const newLunch = dietLunch ? {
+              protein: resolveDietItemId(dietLunch.protein, 'Protéines'),
+              vegetable: resolveDietItemId(dietLunch.vegetable, 'Légumes'),
+              starch: resolveDietItemId(dietLunch.starch, 'Féculents'),
+              dessert: resolveDietItemId(dietLunch.dessert, 'Desserts')
+            } : undefined;
 
-          const newDinner = dietDinner ? {
-            protein: resolveDietItemId(dietDinner.protein, 'Protéines'),
-            vegetable: resolveDietItemId(dietDinner.vegetable, 'Légumes'),
-            starch: resolveDietItemId(dietDinner.starch, 'Féculents'),
-            dessert: resolveDietItemId(dietDinner.dessert, 'Desserts')
-          } : undefined;
+            const newDinner = dietDinner ? {
+              protein: resolveDietItemId(dietDinner.protein, 'Protéines'),
+              vegetable: resolveDietItemId(dietDinner.vegetable, 'Légumes'),
+              starch: resolveDietItemId(dietDinner.starch, 'Féculents'),
+              dessert: resolveDietItemId(dietDinner.dessert, 'Desserts')
+            } : undefined;
 
-          updatedMealPlan[dateStr] = {
-            ...updatedMealPlan[dateStr],
-            ...(newLunch ? { dietLunch: newLunch } : {}),
-            ...(newDinner ? { dietDinner: newDinner } : {})
-          };
+            updatedMealPlan[dateStr] = {
+              ...updatedMealPlan[dateStr],
+              ...(newLunch ? { dietLunch: newLunch } : {}),
+              ...(newDinner ? { dietDinner: newDinner } : {})
+            };
+          });
+
+          return changed ? { ...prevSet, foodPortions: newPortions, foodCategories: newCategories } : prevSet;
         });
 
         setMealPlan(updatedMealPlan);
@@ -919,7 +1520,7 @@ export default function App() {
         }
 
         let addedCount = 0;
-        let extractedItems: { name: string, category?: string, weight?: string }[] = [];
+        let extractedItems: { name: string, category?: string, weight?: string, recipeName?: string }[] = [];
         const newRecipes: DietRecipe[] = [];
         
         // Ensure we know the existing ones to avoid dupes in the recipe list itself
@@ -948,7 +1549,7 @@ export default function App() {
                 const trName = i.name.trim();
                 if (trName) {
                   recipeItems.push({ name: trName, category: i.category, weight: i.weight || '' });
-                  extractedItems.push({ name: trName, category: i.category, weight: i.weight || '' });
+                  extractedItems.push({ name: trName, category: i.category, weight: i.weight || '', recipeName: trimmedName });
                 }
               }
             });
@@ -961,7 +1562,7 @@ export default function App() {
               const ingWeight = match ? match[2].trim() : '';
               if (ingName) {
                 recipeItems.push({ name: ingName, weight: ingWeight });
-                extractedItems.push({ name: ingName, weight: ingWeight });
+                extractedItems.push({ name: ingName, weight: ingWeight, recipeName: trimmedName });
               }
             });
           }
@@ -980,7 +1581,7 @@ export default function App() {
           return;
         }
 
-        const existingNamesInDiet = new Set(dietItems.map(d => d.name.trim().toLowerCase()));
+        const existingDietItemMap = new Map<string, DietItem>(dietItems.map(d => [d.name.trim().toLowerCase(), d]));
         const existingNamesInSettings = new Set(
           (settings.foodPortions || []).map(p => p.name.trim().toLowerCase())
         );
@@ -989,11 +1590,23 @@ export default function App() {
         const seenNew = new Set<string>();
 
         extractedItems.forEach(ex => {
-          const nLow = ex.name.toLowerCase();
-          const isKnown = existingNamesInDiet.has(nLow) || existingNamesInSettings.has(nLow);
-          if (!isKnown) {
-            if (!seenNew.has(nLow)) {
-              seenNew.add(nLow);
+          const nLow = ex.name.trim().toLowerCase();
+          const existingDietItem = existingDietItemMap.get(nLow);
+          const isKnownInBoth = existingDietItem && existingNamesInSettings.has(nLow);
+
+          let hasUnitMismatch = false;
+          if (existingDietItem && existingDietItem.weight && ex.weight) {
+            const existingParsed = parseWeightAndUnit(existingDietItem.weight);
+            const importedParsed = parseWeightAndUnit(ex.weight);
+            if (existingParsed.unit && importedParsed.unit && existingParsed.unit.toLowerCase() !== importedParsed.unit.toLowerCase()) {
+              hasUnitMismatch = true;
+            }
+          }
+
+          if (!isKnownInBoth || hasUnitMismatch) {
+            const key = `${ex.recipeName || ''}_${nLow}`;
+            if (!seenNew.has(key)) {
+              seenNew.add(key);
               newFoods.push(ex);
             }
           }
@@ -1003,16 +1616,24 @@ export default function App() {
           setPendingDietRecipes(newRecipes);
           setPendingNewFoodsToReview(newFoods);
           setCurrentReviewIndex(0);
-          setSelectedMatchMode('__NEW__');
-          setReviewedReplacements({});
-          setReviewedNewFoods([]);
 
           const firstFood = newFoods[0];
+          const existingInDietFirst = dietItems.find(d => d.name.toLowerCase() === firstFood.name.toLowerCase());
+          if (existingInDietFirst) {
+            setSelectedMatchMode(existingInDietFirst.name);
+          } else {
+            setSelectedMatchMode('__NEW__');
+          }
+
+          setReviewedReplacements({});
+          setReviewedWeightOverrides({});
+          setReviewedNewFoods([]);
+
           const defaultDietCats = ['Protéines', 'Légumes', 'Féculents', 'Desserts'];
-          setReviewDietCat((firstFood.category && defaultDietCats.includes(firstFood.category)) ? firstFood.category as DietCategory : 'Légumes');
+          setReviewDietCat((firstFood.category && defaultDietCats.includes(firstFood.category)) ? firstFood.category as DietCategory : (existingInDietFirst?.category || 'Légumes'));
           
-          const availableSettingsCategories = settings.foodCategories || [];
-          setReviewSetCat(availableSettingsCategories.length > 0 ? availableSettingsCategories[0] : 'Légumes');
+          const initialSetCat = detectSettingsCategoryFromFoodName(firstFood.name, firstFood.category);
+          setReviewSetCat(initialSetCat);
 
           setShowReviewNewFoodsModal(true);
         } else {
@@ -1173,8 +1794,8 @@ export default function App() {
           const defaultDietCats = ['Protéines', 'Légumes', 'Féculents', 'Desserts'];
           setReviewDietCat((firstFood.category && defaultDietCats.includes(firstFood.category)) ? firstFood.category as DietCategory : 'Légumes');
 
-          const availableSettingsCategories = settings.foodCategories || [];
-          setReviewSetCat((firstFood.settingsCategory && availableSettingsCategories.includes(firstFood.settingsCategory)) ? firstFood.settingsCategory : (availableSettingsCategories.length > 0 ? availableSettingsCategories[0] : 'Légumes'));
+          const initialSetCat = detectSettingsCategoryFromFoodName(firstFood.name, firstFood.settingsCategory || firstFood.category);
+          setReviewSetCat(initialSetCat);
 
           setShowReviewNewFoodsModal(true);
         } else {
@@ -1226,6 +1847,41 @@ export default function App() {
     }));
     const wsFood = XLSX.utils.json_to_sheet(foodData);
     XLSX.utils.book_append_sheet(workbook, wsFood, "Aliments");
+
+    // Sheet 4: Portions (toutes les règles détaillées)
+    const portionsData: any[] = [];
+    (settings.foodPortions || []).forEach(item => {
+      const rules = getPortionRules(item);
+      rules.forEach(r => {
+        portionsData.push({
+          "Aliment": item.name || '',
+          "Catégorie": item.category || "Sans catégorie",
+          "Quantité base": r.baseAmount || 1,
+          "Unité base": r.baseUnit || 'portion(s)',
+          "Quantité achat": r.purchaseAmount || 1,
+          "Unité achat": r.purchaseUnit || 'pièce(s)',
+          "Seuil min": r.minThreshold || ''
+        });
+      });
+    });
+    const wsPortions = XLSX.utils.json_to_sheet(portionsData);
+    XLSX.utils.book_append_sheet(workbook, wsPortions, "Portions");
+
+    // Sheet 5: Unités Recettes
+    const recipeUnitsData = getAvailableRecipeUnits(settings).map(u => ({
+      "Unité": u,
+      "Type": (settings.customWeightUnits || []).includes(u) ? "Personnalisée" : "Standard"
+    }));
+    const wsRecipeUnits = XLSX.utils.json_to_sheet(recipeUnitsData);
+    XLSX.utils.book_append_sheet(workbook, wsRecipeUnits, "Unités Recettes");
+
+    // Sheet 6: Unités Portions
+    const portionUnitsData = getAvailablePortionUnits(settings).map(u => ({
+      "Unité": u,
+      "Type": (settings.customPortionUnits || []).includes(u) ? "Personnalisée" : "Standard"
+    }));
+    const wsPortionUnits = XLSX.utils.json_to_sheet(portionUnitsData);
+    XLSX.utils.book_append_sheet(workbook, wsPortionUnits, "Unités Portions");
 
     XLSX.writeFile(workbook, `culinashare_stocks_${today}.xlsx`);
   };
@@ -1300,35 +1956,219 @@ export default function App() {
           });
         }
 
-        // Process Aliments
-        if (wb.SheetNames.includes("Aliments")) {
-          const ws = wb.Sheets["Aliments"];
+        // Process Unités Recettes
+        const recipeUnitsSheet = wb.SheetNames.find((s: string) => 
+          (s.toLowerCase().includes("unit") && s.toLowerCase().includes("recette")) ||
+          s.toLowerCase() === "unités" || s.toLowerCase() === "unites"
+        );
+        let customRecipeUnitsFromExcel: string[] = [];
+        if (recipeUnitsSheet) {
+          const ws = wb.Sheets[recipeUnitsSheet];
           const data = XLSX.utils.sheet_to_json(ws) as any[];
-          
-          setSettings(prev => {
-            const updatedFoodPortions = [...(prev.foodPortions || [])];
+          data.forEach(row => {
+            const unitName = (row["Unité"] || row["unité"] || row["Unite"] || row["unite"] || row["Unit"] || row["unit"] || "").toString().trim();
+            const type = (row["Type"] || row["type"] || "").toString().trim().toLowerCase();
+            if (unitName) {
+              if (type.includes("personnalis") || !MASTER_RECIPE_UNITS.includes(unitName)) {
+                if (!customRecipeUnitsFromExcel.includes(unitName)) {
+                  customRecipeUnitsFromExcel.push(unitName);
+                }
+              }
+            }
+          });
+        }
+
+        // Process Unités Portions
+        const portionUnitsSheet = wb.SheetNames.find((s: string) => 
+          s.toLowerCase().includes("unit") && s.toLowerCase().includes("portion")
+        );
+        let customPortionUnitsFromExcel: string[] = [];
+        let portionUnitsListFromExcel: string[] = [];
+        if (portionUnitsSheet) {
+          const ws = wb.Sheets[portionUnitsSheet];
+          const data = XLSX.utils.sheet_to_json(ws) as any[];
+          data.forEach(row => {
+            const unitName = (row["Unité"] || row["unité"] || row["Unite"] || row["unite"] || row["Unit"] || row["unit"] || "").toString().trim();
+            const type = (row["Type"] || row["type"] || "").toString().trim().toLowerCase();
+            if (unitName) {
+              if (!portionUnitsListFromExcel.includes(unitName)) {
+                portionUnitsListFromExcel.push(unitName);
+              }
+              if (type.includes("personnalis") || !MASTER_PORTION_UNITS.includes(unitName)) {
+                if (!customPortionUnitsFromExcel.includes(unitName)) {
+                  customPortionUnitsFromExcel.push(unitName);
+                }
+              }
+            }
+          });
+        }
+
+        // Process Portions and Aliments sheets
+        const portionSheetName = wb.SheetNames.find((s: string) => s.toLowerCase().includes("portion") && !s.toLowerCase().includes("unit"));
+        const alimentSheetName = wb.SheetNames.find((s: string) => s.toLowerCase().includes("aliment") && !s.toLowerCase().includes("unit"));
+
+        setSettings(prev => {
+          let updatedFoodPortions = [...(prev.foodPortions || [])];
+          let updatedCustomWeightUnits = [...(prev.customWeightUnits || [])];
+          let updatedCustomPortionUnits = [...(prev.customPortionUnits || [])];
+          let updatedPortionUnitsList = prev.portionUnitsList ? [...prev.portionUnitsList] : undefined;
+
+          // Merge custom recipe units
+          customRecipeUnitsFromExcel.forEach(u => {
+            if (!updatedCustomWeightUnits.includes(u)) {
+              updatedCustomWeightUnits.push(u);
+            }
+          });
+
+          // Merge portion units
+          if (portionUnitsListFromExcel.length > 0) {
+            updatedPortionUnitsList = Array.from(new Set([...(updatedPortionUnitsList || MASTER_PORTION_UNITS), ...portionUnitsListFromExcel]));
+          }
+          customPortionUnitsFromExcel.forEach(u => {
+            if (!updatedCustomPortionUnits.includes(u)) {
+              updatedCustomPortionUnits.push(u);
+            }
+          });
+
+          // If Aliments sheet present, process names and categories
+          if (alimentSheetName) {
+            const ws = wb.Sheets[alimentSheetName];
+            const data = XLSX.utils.sheet_to_json(ws) as any[];
             data.forEach(row => {
-              const foodName = (row.Aliment || row.aliment || row.ALIMENT || "").toString().trim();
+              const foodName = (row.Aliment || row.aliment || row.ALIMENT || row.Article || row.article || "").toString().trim();
               const category = (row.Catégorie || row.catégorie || row.CATEGORIE || "").toString().trim();
               if (!foodName) return;
-              
               const exists = updatedFoodPortions.find(f => f.name.toLowerCase() === foodName.toLowerCase());
               if (!exists) {
                 updatedFoodPortions.push({
                   id: Math.random().toString(36).substr(2, 9),
                   name: foodName,
                   amount: 1,
-                  unit: 'g',
-                  category: category === "Sans catégorie" ? undefined : category
+                  unit: 'portion(s)',
+                  category: category && category !== "Sans catégorie" ? category : undefined,
+                  baseAmount: 1,
+                  baseUnit: 'portion(s)',
+                  purchaseAmount: 1,
+                  purchaseUnit: 'pièce(s)'
                 });
               } else if (category && category !== "Sans catégorie") {
-                // Update category if it exists but was empty or different
                 exists.category = category;
               }
             });
-            return { ...prev, foodPortions: updatedFoodPortions };
+          }
+
+          // If Portions sheet present, process all detailed rules
+          if (portionSheetName) {
+            const ws = wb.Sheets[portionSheetName];
+            const data = XLSX.utils.sheet_to_json(ws) as any[];
+            const foodsMap = new Map<string, { name: string; category: string; rules: PortionRule[] }>();
+
+            data.forEach(row => {
+              const foodName = (row.Aliment || row.aliment || row.ALIMENT || row.Name || row.name || row.Article || row.article || "").toString().trim();
+              if (!foodName) return;
+
+              const category = (row.Catégorie || row.catégorie || row.CATEGORIE || row.Category || row.category || "").toString().trim();
+              const baseAmountRaw = row["Quantité base"] ?? row["quantité base"] ?? row.baseAmount ?? row["Quantité Base"] ?? row.amount ?? row.Quantité ?? 1;
+              const baseAmount = Number(baseAmountRaw);
+              const baseUnit = (row["Unité base"] || row["unité base"] || row.baseUnit || row["Unité Base"] || row.unit || row.Unité || "portion(s)").toString().trim();
+              const purchaseAmountRaw = row["Quantité achat"] ?? row["quantité achat"] ?? row.purchaseAmount ?? row["Quantité Achat"] ?? 1;
+              const purchaseAmount = Number(purchaseAmountRaw);
+              const purchaseUnit = (row["Unité achat"] || row["unité achat"] || row.purchaseUnit || row["Unité Achat"] || "pièce(s)").toString().trim();
+              const minThresholdRaw = row["Seuil min"] ?? row["seuil min"] ?? row["Seuil Min"] ?? row["Seuil"] ?? row.minThreshold ?? row.threshold;
+              const minThresholdNum = Number(minThresholdRaw);
+              const minThreshold = !isNaN(minThresholdNum) && minThresholdNum > 0 ? minThresholdNum : undefined;
+
+              const key = foodName.toLowerCase();
+              const rule: PortionRule = {
+                id: Math.random().toString(36).substr(2, 9),
+                baseAmount: isNaN(baseAmount) || baseAmount <= 0 ? 1 : baseAmount,
+                baseUnit: baseUnit || 'portion(s)',
+                purchaseAmount: isNaN(purchaseAmount) || purchaseAmount <= 0 ? 1 : purchaseAmount,
+                purchaseUnit: purchaseUnit || 'pièce(s)',
+                minThreshold: minThreshold
+              };
+
+              if (!foodsMap.has(key)) {
+                foodsMap.set(key, {
+                  name: foodName,
+                  category: category && category !== "Sans catégorie" ? category : 'Épicerie',
+                  rules: [rule]
+                });
+              } else {
+                const existingEntry = foodsMap.get(key)!;
+                if (category && category !== "Sans catégorie") existingEntry.category = category;
+                const dupIdx = existingEntry.rules.findIndex(r => 
+                  r.baseUnit.toLowerCase() === rule.baseUnit.toLowerCase() && 
+                  r.baseAmount === rule.baseAmount && 
+                  r.purchaseUnit.toLowerCase() === rule.purchaseUnit.toLowerCase()
+                );
+                if (dupIdx >= 0) {
+                  existingEntry.rules[dupIdx] = rule;
+                } else {
+                  existingEntry.rules.push(rule);
+                }
+              }
+            });
+
+            foodsMap.forEach(entry => {
+              const idx = updatedFoodPortions.findIndex(p => p.name.trim().toLowerCase() === entry.name.toLowerCase());
+              const firstRule = entry.rules[0] || {
+                id: Math.random().toString(36).substr(2, 9),
+                baseAmount: 1,
+                baseUnit: 'portion(s)',
+                purchaseAmount: 1,
+                purchaseUnit: 'pièce(s)',
+                minThreshold: undefined
+              };
+
+              const updatedItem: FoodPortion = {
+                id: idx >= 0 ? updatedFoodPortions[idx].id : Math.random().toString(36).substr(2, 9),
+                name: entry.name,
+                category: entry.category || (idx >= 0 ? updatedFoodPortions[idx].category : 'Épicerie'),
+                baseAmount: firstRule.baseAmount,
+                baseUnit: firstRule.baseUnit,
+                purchaseAmount: firstRule.purchaseAmount,
+                purchaseUnit: firstRule.purchaseUnit,
+                amount: firstRule.baseAmount,
+                unit: firstRule.baseUnit,
+                rules: entry.rules
+              };
+
+              if (idx >= 0) {
+                updatedFoodPortions[idx] = updatedItem;
+              } else {
+                updatedFoodPortions.push(updatedItem);
+              }
+            });
+          }
+
+          return {
+            ...prev,
+            foodPortions: updatedFoodPortions,
+            customWeightUnits: updatedCustomWeightUnits,
+            customPortionUnits: updatedCustomPortionUnits,
+            portionUnitsList: updatedPortionUnitsList
+          };
+        });
+
+        const importedExcelFoods: { name: string; category?: string; unit?: string }[] = [];
+        if (wb.SheetNames.includes("Récurrents")) {
+          const ws = wb.Sheets["Récurrents"];
+          const data = XLSX.utils.sheet_to_json(ws) as any[];
+          data.forEach(row => {
+            const itemName = (row.Article || row.article || row.ARTICLE || "").toString().trim();
+            if (itemName) importedExcelFoods.push({ name: itemName, unit: (row.Unité || row.unité || row.UNITE || "unité").toString() });
           });
         }
+        if (wb.SheetNames.includes("reserves")) {
+          const ws = wb.Sheets["reserves"];
+          const data = XLSX.utils.sheet_to_json(ws) as any[];
+          data.forEach(row => {
+            const itemName = (row.Article || row.article || row.ARTICLE || "").toString().trim();
+            if (itemName) importedExcelFoods.push({ name: itemName, unit: (row.Unité || row.unité || row.UNITE || "unité").toString() });
+          });
+        }
+        checkAndPromptMissingFoodPortions(importedExcelFoods);
 
         alert("Données Excel importées !");
       } catch (err) {
@@ -1386,6 +2226,7 @@ export default function App() {
             setDietRecipes={setDietRecipes}
             defaultTab={settings.defaultRecipesTab || 'recipes'}
             settings={settings}
+            setSettings={setSettings}
           />
         )}
         {activeTab === 'search' && (
@@ -1446,6 +2287,7 @@ export default function App() {
               mergeToShoppingList(items.map(i => ({ ...i, checked: false, id: Math.random().toString(36).substr(2, 9) })));
               setActiveTab('shopping');
             }}
+            settings={settings}
           />
         )}
         {activeTab === 'reserve' && (
@@ -1454,6 +2296,7 @@ export default function App() {
             setItems={setReserveItems}
             foodPortions={settings.foodPortions}
             onAddFoodToSettings={handleQuickAddFoodToSettings}
+            settings={settings}
           />
         )}
         {activeTab === 'shopping' && (
@@ -1461,6 +2304,7 @@ export default function App() {
             list={shoppingList} 
             setList={setShoppingList} 
             settings={settings}
+            setSettings={setSettings}
             foodPortions={settings.foodPortions || []}
             foodCategories={settings.foodCategories || ['Légumes', 'Fruits', 'Viandes', 'Poissons', 'Épicerie', 'Frais', 'Surgelés', 'Boissons', 'Boulangerie', 'Hygiène', 'Autre']}
             onAddFoodToSettings={handleQuickAddFoodToSettings}
@@ -1468,6 +2312,7 @@ export default function App() {
             setReserveItems={setReserveItems}
             pantryGroups={pantryGroups}
             setPantryGroups={setPantryGroups}
+            dietItems={dietItems}
           />
         )}
         {activeTab === 'settings' && (
@@ -1499,6 +2344,109 @@ export default function App() {
         )}
       </main>
 
+      {/* MODAL NOUVEAUX ALIMENTS À CLASSER DANS RÉGLAGES */}
+      {showUnclassifiedFoodsModal && unclassifiedFoodsQueue.length > 0 && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[170] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-[32px] sm:rounded-[40px] w-full max-w-xl overflow-hidden shadow-2xl border border-purple-100 flex flex-col max-h-[90vh] animate-scaleUp">
+            <div className="bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-600 p-6 sm:p-8 text-white relative">
+              <button 
+                onClick={() => {
+                  setShowUnclassifiedFoodsModal(false);
+                  setUnclassifiedFoodsQueue([]);
+                }}
+                className="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors font-bold text-lg"
+              >
+                ✕
+              </button>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-3xl">📁</span>
+                <h3 className="text-xl sm:text-2xl font-black tracking-tight">
+                  Nouveaux aliments détectés
+                </h3>
+              </div>
+              <p className="text-purple-100 text-xs sm:text-sm font-medium leading-relaxed">
+                {unclassifiedFoodsQueue.length === 1 
+                  ? "Cet aliment n'est pas encore enregistré dans vos Réglages > Aliments. Choisissez sa catégorie :"
+                  : `Ces ${unclassifiedFoodsQueue.length} aliments ne sont pas encore enregistrés dans vos Réglages > Aliments. Choisissez leur catégorie :`
+                }
+              </p>
+            </div>
+
+            <div className="p-6 sm:p-8 overflow-y-auto space-y-4 flex-1">
+              {unclassifiedFoodsQueue.map((item, idx) => (
+                <div key={item.id} className="bg-gray-50 border border-gray-200/80 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-black text-xs flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      {item.name}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-8 space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-700 tracking-wider">
+                        Catégorie Réglages
+                      </label>
+                      <select
+                        value={item.category}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setUnclassifiedFoodsQueue(prev => prev.map(q => q.id === item.id ? { ...q, category: val } : q));
+                        }}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 font-bold text-xs text-gray-800 outline-none focus:ring-2 focus:ring-purple-300"
+                      >
+                        {(settings.foodCategories || FOOD_CATEGORIES).map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="col-span-4 space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-700 tracking-wider">
+                        Unité
+                      </label>
+                      <select
+                        value={item.unit}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setUnclassifiedFoodsQueue(prev => prev.map(q => q.id === item.id ? { ...q, unit: val } : q));
+                        }}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 font-bold text-xs text-gray-800 outline-none focus:ring-2 focus:ring-purple-300 cursor-pointer"
+                      >
+                        {getAvailableUnits(settings).map(u => (
+                          <option key={u} value={u}>{u}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-6 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowUnclassifiedFoodsModal(false);
+                  setUnclassifiedFoodsQueue([]);
+                }}
+                className="px-5 py-3 rounded-2xl font-black text-xs text-gray-700 hover:bg-gray-200 transition-colors"
+              >
+                Ignorer
+              </button>
+              <button
+                onClick={handleSaveUnclassifiedFoods}
+                className="px-6 py-3 rounded-2xl font-black text-xs text-white bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-200 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <span>Enregistrer dans Réglages</span>
+                <span>→</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL REVIEW NOUVEAUX ALIMENTS (IMPORT RECETTES RÉGIME) */}
       {showReviewNewFoodsModal && pendingNewFoodsToReview.length > 0 && currentReviewIndex < pendingNewFoodsToReview.length && (() => {
         const currentFood = pendingNewFoodsToReview[currentReviewIndex];
@@ -1525,20 +2473,35 @@ export default function App() {
 
         const handleConfirmCurrent = () => {
           const updatedReplacements = { ...reviewedReplacements };
+          const updatedWeightOverrides = { ...reviewedWeightOverrides };
           const updatedNewFoods = [...reviewedNewFoods];
           const updatedDietItemsToAdd = [...reviewedDietItemsToAdd];
+
+          const finalWeight = `${reviewWeightValue.trim()} ${reviewWeightUnit.trim()}`.trim();
+
+          if (currentFood.recipeName) {
+            updatedWeightOverrides[`${currentFood.recipeName}_${currentFood.name}`] = finalWeight;
+            if (!isNewSelected) {
+              updatedWeightOverrides[`${currentFood.recipeName}_${selectedMatchMode}`] = finalWeight;
+            }
+          }
+          updatedWeightOverrides[currentFood.name] = finalWeight;
+          if (!isNewSelected) {
+            updatedWeightOverrides[selectedMatchMode] = finalWeight;
+          }
+          setReviewedWeightOverrides(updatedWeightOverrides);
 
           if (isNewSelected) {
             updatedNewFoods.push({
               name: currentFood.name,
-              weight: currentFood.weight,
+              weight: finalWeight || currentFood.weight,
               dietCat: reviewDietCat,
               setCat: reviewSetCat
             });
             setReviewedNewFoods(updatedNewFoods);
             updatedDietItemsToAdd.push({
               name: currentFood.name,
-              weight: currentFood.weight,
+              weight: finalWeight || currentFood.weight,
               dietCat: reviewDietCat
             });
           } else {
@@ -1546,7 +2509,7 @@ export default function App() {
             setReviewedReplacements(updatedReplacements);
             updatedDietItemsToAdd.push({
               name: selectedMatchMode,
-              weight: currentFood.weight,
+              weight: finalWeight || currentFood.weight,
               dietCat: reviewDietCat
             });
           }
@@ -1555,25 +2518,37 @@ export default function App() {
           if (currentReviewIndex + 1 < pendingNewFoodsToReview.length) {
             const nextIdx = currentReviewIndex + 1;
             setCurrentReviewIndex(nextIdx);
-            setSelectedMatchMode('__NEW__');
             const nextFood = pendingNewFoodsToReview[nextIdx];
+            const existingInDietNext = dietItems.find(d => d.name.toLowerCase() === nextFood.name.toLowerCase());
+            if (existingInDietNext) {
+              setSelectedMatchMode(existingInDietNext.name);
+            } else {
+              setSelectedMatchMode('__NEW__');
+            }
+
             const defaultDietCats = ['Protéines', 'Légumes', 'Féculents', 'Desserts'];
-            setReviewDietCat((nextFood.category && defaultDietCats.includes(nextFood.category)) ? nextFood.category as DietCategory : 'Légumes');
-            const availableSettingsCategories = settings.foodCategories || [];
-            setReviewSetCat(availableSettingsCategories.length > 0 ? availableSettingsCategories[0] : 'Légumes');
+            setReviewDietCat((nextFood.category && defaultDietCats.includes(nextFood.category)) ? nextFood.category as DietCategory : (existingInDietNext?.category || 'Légumes'));
+            const nextSetCat = detectSettingsCategoryFromFoodName(nextFood.name, nextFood.category || (nextFood as any).settingsCategory);
+            setReviewSetCat(nextSetCat);
           } else {
             // Finalize import!
-            // 1. Apply replacements to recipes
+            // 1. Apply replacements & per-recipe weight overrides to recipes
             const finalRecipes = pendingDietRecipes.map(recipe => {
               const updatedRecipe = { ...recipe };
               
               if (Array.isArray(updatedRecipe.items) && updatedRecipe.items.length > 0) {
                 updatedRecipe.items = updatedRecipe.items.map(it => {
                   const rep = updatedReplacements[it.name];
-                  if (rep) {
-                    return { ...it, name: rep };
-                  }
-                  return it;
+                  const targetName = rep || it.name;
+                  const keyRecipeOld = `${recipe.name}_${it.name}`;
+                  const keyRecipeNew = `${recipe.name}_${targetName}`;
+                  const weightOverride = updatedWeightOverrides[keyRecipeOld] || updatedWeightOverrides[keyRecipeNew] || updatedWeightOverrides[it.name] || updatedWeightOverrides[targetName];
+
+                  return {
+                    ...it,
+                    name: targetName,
+                    weight: weightOverride || it.weight
+                  };
                 });
                 updatedRecipe.ingredients = updatedRecipe.items.map(i => i.weight ? `${i.name} ${i.weight}` : i.name).join(' + ');
               } else if (typeof updatedRecipe.ingredients === 'string') {
@@ -1583,6 +2558,17 @@ export default function App() {
                   const regex = new RegExp(`(^|\\s|\\+|\\,|\\()${escaped}(\\s|\\+|\\,|\\)|$)`, 'gi');
                   ingStr = ingStr.replace(regex, `$1${newName}$2`);
                 });
+
+                Object.entries(updatedWeightOverrides).forEach(([key, newWeight]) => {
+                  if (key.startsWith(`${recipe.name}_`)) {
+                    const foodName = key.replace(`${recipe.name}_`, '');
+                    const itemInRecipe = (recipe.items || []).find(i => i.name === foodName);
+                    if (itemInRecipe && itemInRecipe.weight && ingStr.includes(itemInRecipe.weight)) {
+                      ingStr = ingStr.replace(itemInRecipe.weight, newWeight);
+                    }
+                  }
+                });
+
                 updatedRecipe.ingredients = ingStr;
               }
 
@@ -1610,8 +2596,13 @@ export default function App() {
               });
             }
 
-            // 3. Add new foods to Settings > Aliments
-            if (updatedNewFoods.length > 0) {
+            // 3. Add missing foods to Settings > Aliments
+            const allFoodsForSet = [
+              ...updatedNewFoods.map(f => ({ name: f.name, cat: f.setCat })),
+              ...updatedDietItemsToAdd.map(f => ({ name: f.name, cat: detectSettingsCategoryFromFoodName(f.name, f.dietCat) }))
+            ];
+
+            if (allFoodsForSet.length > 0) {
               setSettings(prevSet => {
                 const currentPortions = prevSet.foodPortions || [];
                 const currentCategories = prevSet.foodCategories || [];
@@ -1619,20 +2610,24 @@ export default function App() {
                 const newPortions = [...currentPortions];
                 let newCategories = [...currentCategories];
                 
-                updatedNewFoods.forEach(ex => {
+                allFoodsForSet.forEach(ex => {
                   const nLow = ex.name.trim().toLowerCase();
-                  if (!newPortions.some(p => p.name.trim().toLowerCase() === nLow)) {
+                  if (nLow && !newPortions.some(p => p.name.trim().toLowerCase() === nLow)) {
                     newPortions.push({
                       id: Math.random().toString(36).substr(2, 9),
                       name: ex.name.trim(),
                       amount: 1,
                       unit: 'g',
-                      category: ex.setCat
+                      category: ex.cat || 'Épicerie',
+                      baseAmount: 1,
+                      baseUnit: 'portion(s)',
+                      purchaseAmount: 1,
+                      purchaseUnit: 'pièce(s)'
                     });
                     changed = true;
                   }
-                  if (!newCategories.includes(ex.setCat)) {
-                    newCategories.push(ex.setCat);
+                  if (ex.cat && !newCategories.includes(ex.cat)) {
+                    newCategories.push(ex.cat);
                     changed = true;
                   }
                 });
@@ -1648,10 +2643,10 @@ export default function App() {
             setCurrentReviewIndex(0);
             setSelectedMatchMode('__NEW__');
             setReviewedReplacements({});
+            setReviewedWeightOverrides({});
             setReviewedNewFoods([]);
             setReviewedDietItemsToAdd([]);
 
-            const replacedCount = Object.keys(updatedReplacements).length;
             const newCreatedCount = updatedNewFoods.length;
             const totalAddedDiet = updatedDietItemsToAdd.length;
 
@@ -1670,6 +2665,7 @@ export default function App() {
           setCurrentReviewIndex(0);
           setSelectedMatchMode('__NEW__');
           setReviewedReplacements({});
+          setReviewedWeightOverrides({});
           setReviewedNewFoods([]);
           setReviewedDietItemsToAdd([]);
         };
@@ -1688,20 +2684,28 @@ export default function App() {
                   Aliment {currentReviewIndex + 1} sur {pendingNewFoodsToReview.length}
                 </p>
 
-                {/* Box aliment détecté */}
-                <div className="bg-gray-50 rounded-2xl p-4 mb-5 text-left border border-gray-200/80 shadow-2xs">
-                  <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-1">
-                    Aliment à valider :
-                  </p>
-                  <p className="text-xl font-black text-purple-800 flex items-center gap-2 flex-wrap">
-                    <span>🥗</span>
-                    <span>« {currentFood.name} »</span>
-                    {currentFood.weight && (
-                      <span className="text-xs font-bold text-gray-500 bg-white px-2.5 py-0.5 rounded-lg border border-gray-200 shadow-2xs">
-                        {currentFood.weight}
-                      </span>
-                    )}
-                  </p>
+                {/* Box aliment détecté & recette concernée */}
+                <div className="bg-gray-50 rounded-2xl p-4 mb-5 text-left border border-gray-200/80 shadow-2xs space-y-2">
+                  {currentFood.recipeName && (
+                    <div className="flex items-center gap-2 bg-purple-100/80 text-purple-900 px-3 py-1.5 rounded-xl border border-purple-200 text-xs font-black">
+                      <span>📖</span>
+                      <span>Recette concernée : « {currentFood.recipeName} »</span>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                      Aliment à valider :
+                    </p>
+                    <p className="text-xl font-black text-purple-800 flex items-center gap-2 flex-wrap">
+                      <span>🥗</span>
+                      <span>« {currentFood.name} »</span>
+                      {currentFood.weight && (
+                        <span className="text-xs font-bold text-gray-500 bg-white px-2.5 py-0.5 rounded-lg border border-gray-200 shadow-2xs">
+                          Quantité importée : {currentFood.weight}
+                        </span>
+                      )}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Choix : Nouveau ou Aliments ressemblants existants */}
@@ -1891,6 +2895,66 @@ export default function App() {
                       </div>
                     </div>
                   )}
+
+                  {/* Champ Poids / Quantité et Unité pour l'import */}
+                  {(() => {
+                    const importedParsed = parseWeightAndUnit(currentFood.weight || '');
+                    const existingDietItem = !isNewSelected ? dietItems.find(d => d.name.toLowerCase() === selectedMatchMode.toLowerCase()) : dietItems.find(d => d.name.toLowerCase() === currentFood.name.toLowerCase());
+                    const existingWeightStr = existingDietItem ? existingDietItem.weight : '';
+                    const existingParsed = parseWeightAndUnit(existingWeightStr);
+                    const isUnitMismatch = existingWeightStr && importedParsed.unit && existingParsed.unit && existingParsed.unit.toLowerCase() !== importedParsed.unit.toLowerCase();
+
+                    return (
+                      <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-3 mt-3">
+                        <p className="text-xs font-black text-gray-800 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <span>⚖️</span>
+                            <span>Quantité & Unité pour cette recette :</span>
+                          </span>
+                        </p>
+
+                        {isUnitMismatch && (
+                          <div className="bg-amber-50 p-3.5 rounded-2xl border border-amber-200 text-amber-900 text-xs font-bold space-y-1.5 animate-fadeIn">
+                            <div className="flex items-center gap-1.5 text-amber-800 font-black">
+                              <span>⚠️</span>
+                              <span>Différence d'unité détectée !</span>
+                            </div>
+                            <p className="text-[11px] font-medium text-amber-800 leading-snug">
+                              {currentFood.recipeName ? (
+                                <>Dans la recette <strong>« {currentFood.recipeName} »</strong>, cet aliment est indiqué avec <strong>« {currentFood.weight} »</strong>.</>
+                              ) : (
+                                <>La valeur importée est <strong>« {currentFood.weight} »</strong>.</>
+                              )}
+                              <br />
+                              L'unité de référence dans vos Catégories Régime est en <strong>« {existingParsed.unit} »</strong> ({existingDietItem?.name} : {existingWeightStr}).
+                            </p>
+                            <p className="text-[11px] font-black text-amber-900">
+                              Ajustez la valeur en <strong>{reviewWeightUnit || existingParsed.unit}</strong> à appliquer spécifiquement pour la recette {currentFood.recipeName ? `« ${currentFood.recipeName} »` : 'importée'} :
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-12 gap-2">
+                          <input 
+                            type="text"
+                            value={reviewWeightValue}
+                            onChange={(e) => setReviewWeightValue(e.target.value)}
+                            placeholder="Ex: 100, 1, 2..."
+                            className="col-span-7 bg-white border border-gray-200 rounded-xl px-3 py-2.5 font-bold text-xs text-gray-800 outline-none focus:ring-2 focus:ring-purple-300"
+                          />
+                          <select
+                            value={reviewWeightUnit}
+                            onChange={(e) => setReviewWeightUnit(e.target.value)}
+                            className="col-span-5 bg-white border border-gray-200 rounded-xl px-3 py-2.5 font-bold text-xs text-gray-800 outline-none focus:ring-2 focus:ring-purple-300 cursor-pointer"
+                          >
+                            {getAvailableUnits(settings).map(unit => (
+                              <option key={unit} value={unit}>{unit}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
@@ -1982,7 +3046,8 @@ const InStockView: React.FC<{
   setItems: React.Dispatch<React.SetStateAction<ShoppingListItem[]>>;
   foodPortions: FoodPortion[];
   onAddFoodToSettings: (name: string, unit: string, category: string) => void;
-}> = ({ items, setItems, foodPortions, onAddFoodToSettings }) => {
+  settings?: UserSettings;
+}> = ({ items, setItems, foodPortions, onAddFoodToSettings, settings }) => {
   const [newItemName, setNewItemName] = useState('');
   const [newItemAmount, setNewItemAmount] = useState(1);
   const [newItemUnit, setNewItemUnit] = useState('unité');
@@ -2051,17 +3116,9 @@ const InStockView: React.FC<{
               value={newItemUnit} 
               onChange={e => setNewItemUnit(e.target.value)}
             >
-              <option value="boite">boite</option>
-              <option value="C.à S">C.à S</option>
-              <option value="cl">cl</option>
-              <option value="g">g</option>
-              <option value="kg">kg</option>
-              <option value="L">L</option>
-              <option value="ml">ml</option>
-              <option value="paquet">paq.</option>
-              <option value="pièce">pc.</option>
-              <option value="tranche">tr.</option>
-              <option value="unité">u.</option>
+              {getAvailableUnits(settings).map(u => (
+                <option key={u} value={u}>{u}</option>
+              ))}
             </select>
           </div>
           <button 
@@ -2105,8 +3162,6 @@ const InStockView: React.FC<{
   );
 };
 
-const DIET_RECIPE_UNITS = ['boite', 'C à C', 'C à S', 'cl', 'kg', 'g', 'L', 'ml', 'u.'];
-
 const RecipeBook: React.FC<{ 
   recipes: Recipe[]; 
   mealPlan: Record<string, MealPlanDay>;
@@ -2128,7 +3183,9 @@ const RecipeBook: React.FC<{
   setDietRecipes?: React.Dispatch<React.SetStateAction<DietRecipe[]>>;
   defaultTab?: 'recipes' | 'regime';
   settings: UserSettings;
-}> = ({ recipes, mealPlan, addRecipe, deleteRecipe, onAddToShopping, foodPortions, foodCategories, onAddFoodToSettings, onRemoveFoodFromSettings, updateMealPlan, updateDietMealPlan, setSentMeals, dietItems, setDietItems, dietServings, setDietServings, dietRecipes = [], setDietRecipes, defaultTab = 'recipes', settings }) => {
+  setSettings?: React.Dispatch<React.SetStateAction<UserSettings>>;
+}> = ({ recipes, mealPlan, addRecipe, deleteRecipe, onAddToShopping, foodPortions, foodCategories, onAddFoodToSettings, onRemoveFoodFromSettings, updateMealPlan, updateDietMealPlan, setSentMeals, dietItems, setDietItems, dietServings, setDietServings, dietRecipes = [], setDietRecipes, defaultTab = 'recipes', settings, setSettings }) => {
+  const DIET_RECIPE_UNITS = getAvailableUnits(settings);
   const [viewMode, setViewMode] = useState<'recipes' | 'regime' | 'categories_regime'>(() => (defaultTab as any) || 'recipes');
 
   useEffect(() => {
@@ -2176,12 +3233,15 @@ const RecipeBook: React.FC<{
 
   // Diet modal state
   const [showDietModal, setShowDietModal] = useState(false);
+  const [showRoundingSettingsModal, setShowRoundingSettingsModal] = useState(false);
   const [dietToDelete, setDietToDelete] = useState<DietItem | null>(null);
   const [editingDietItem, setEditingDietItem] = useState<DietItem | null>(null);
   const [dietFormName, setDietFormName] = useState('');
   const [dietFormCategory, setDietFormCategory] = useState<DietCategory>('Protéines');
   const [dietFormSettingsCategory, setDietFormSettingsCategory] = useState<string>('Protéines');
-  const [dietFormWeight, setDietFormWeight] = useState('');
+  const [dietFormWeightValue, setDietFormWeightValue] = useState('100');
+  const [dietFormWeightUnit, setDietFormWeightUnit] = useState('g');
+  const [dietFormRoundWeight, setDietFormRoundWeight] = useState<boolean>(true);
   const [dietSearch, setDietSearch] = useState('');
   const [dietModalServings, setDietModalServings] = useState<number>(2.5);
 
@@ -2339,9 +3399,9 @@ const RecipeBook: React.FC<{
 
     // 4. Keyword heuristics
     if (/poulet|boeuf|bœuf|veau|porc|dinde|jambon|poisson|saumon|thon|cabillaud|colin|oeuf|œuf|tofu|steak|viande|crevette|canard|bacon|saucisse|dinde|lard|protéine|proteine|merlu|lieu|hareng|maquereau|sardine|haché|hache|cordon bleu|nugget|agneau/i.test(cleanName)) return 'Protéines';
-    if (/haricot|courgette|tomate|carotte|brocoli|salade|épinard|epinard|poivron|champignon|poireau|chou|concombre|aubergine|oignon|ail|échalote|echalote|radis|navet|céleri|celeri|betterave|avocat|asperge|poireaux|épinards|epinards|légume|legume|petits pois|artichaut|mâche|mache|roquette|endive|citrouille|potiron|butternut|courge/i.test(cleanName)) return 'Légumes';
-    if (/riz|pâte|pate|coquillette|spaghetti|penne|tagliatelle|pomme de terre|patate|quinoa|boulgour|semoule|pain|lentille|pois chiche|avoine|fécule|fecule|blé|ble|maïs|mais|gnocchi|polenta|féculent|feculent|patates|nouille|vermicelle/i.test(cleanName)) return 'Féculents';
-    if (/yaourt|fromage blanc|compote|pomme|banane|fruit|dessert|fraise|kiwi|orange|poire|pêche|peche|abricot|framboise|mûre|myrtille|cerise|ananas|mangue|melon|pastèque|pasteque|raisin|crème|creme|flan|chocolat|mousse|gâteau|gateau|tarte|sorbet|glace/i.test(cleanName)) return 'Desserts';
+    if (/haricot|courgette|tomate|carotte|brocoli|salade|épinard|epinard|poivron|champignon|poireau|poireaux|chou|concombre|aubergine|oignon|ail|échalote|echalote|radis|navet|céleri|celeri|betterave|avocat|asperge|épinards|epinards|légume|legume|petits pois|artichaut|mâche|mache|roquette|endive|citrouille|potiron|butternut|courge/i.test(cleanName)) return 'Légumes';
+    if (/riz|pâte|pate|coquillette|spaghetti|penne|tagliatelle|pomme de terre|pommes de terre|patate|patates|quinoa|boulgour|semoule|pain|lentille|pois chiche|avoine|fécule|fecule|blé|ble|maïs|mais|gnocchi|polenta|féculent|feculent|nouille|vermicelle/i.test(cleanName)) return 'Féculents';
+    if (/yaourt|fromage blanc|compote|\bpommes?\b(?! de terre)|\bpoires?\b|banane|fruit|dessert|fraise|kiwi|orange|pêche|peche|abricot|framboise|mûre|myrtille|cerise|ananas|mangue|melon|pastèque|pasteque|raisin|crème|creme|flan|chocolat|mousse|gâteau|gateau|tarte|sorbet|glace/i.test(cleanName)) return 'Desserts';
 
     return 'Autre';
   }, [dietItems, foodPortions]);
@@ -2582,6 +3642,12 @@ const RecipeBook: React.FC<{
     (r.title || "").toLowerCase().includes(filter.toLowerCase())
   ).sort((a, b) => a.title.localeCompare(b.title));
 
+  const sortedDietRecipes = useMemo(() => {
+    return [...(dietRecipes || [])].sort((a, b) => 
+      (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' })
+    );
+  }, [dietRecipes]);
+
   const handleEdit = (e: React.MouseEvent, r: Recipe) => {
     e.stopPropagation();
     setEditingRecipe(r);
@@ -2596,7 +3662,9 @@ const RecipeBook: React.FC<{
       ? defaultCat
       : (availableSettingsCategories[0] || 'Protéines');
     setDietFormSettingsCategory(initialSettingsCat);
-    setDietFormWeight('');
+    setDietFormWeightValue('100');
+    setDietFormWeightUnit('g');
+    setDietFormRoundWeight(true);
     setDietModalServings(2.5);
     setShowDietModal(true);
   };
@@ -2616,7 +3684,10 @@ const RecipeBook: React.FC<{
       setDietFormSettingsCategory(initialSettingsCat);
     }
 
-    setDietFormWeight(item.weight);
+    const parsed = parseWeightAndUnit(item.weight);
+    setDietFormWeightValue(parsed.value);
+    setDietFormWeightUnit(parsed.unit);
+    setDietFormRoundWeight(item.roundWeight !== false);
     setDietModalServings(2.5);
     setShowDietModal(true);
   };
@@ -2630,39 +3701,41 @@ const RecipeBook: React.FC<{
       alert("Veuillez saisir le nom de l'aliment.");
       return;
     }
-    if (!dietFormWeight.trim()) {
-      alert("Veuillez indiquer le poids ou la portion.");
-      return;
-    }
+    const valStr = dietFormWeightValue.trim() || '100';
+    const unitStr = dietFormWeightUnit.trim() || 'g';
+    const fullWeight = `${valStr} ${unitStr}`;
 
-    const normalizedWeight = formatScaledWeight(dietFormWeight.trim(), 2.5, dietModalServings);
+    const normalizedWeight = formatScaledWeight(fullWeight, 2.5, dietModalServings, settings, dietFormRoundWeight);
 
     if (editingDietItem) {
       setDietItems(prev => prev.map(item => item.id === editingDietItem.id ? {
         ...item,
         name: dietFormName.trim(),
         category: dietFormCategory,
-        weight: normalizedWeight
+        weight: normalizedWeight,
+        roundWeight: dietFormRoundWeight
       } : item));
     } else {
       const newItem: DietItem = {
         id: Math.random().toString(36).substr(2, 9),
         name: dietFormName.trim(),
         category: dietFormCategory,
-        weight: normalizedWeight
+        weight: normalizedWeight,
+        roundWeight: dietFormRoundWeight
       };
       setDietItems(prev => [...prev, newItem]);
     }
 
     // Enregistrer dans Réglages, Aliments par rapport à Catégories (Réglages)
     if (onAddFoodToSettings) {
-      onAddFoodToSettings(dietFormName.trim(), 'g', dietFormSettingsCategory);
+      onAddFoodToSettings(dietFormName.trim(), unitStr, dietFormSettingsCategory);
     }
 
     setShowDietModal(false);
     setEditingDietItem(null);
     setDietFormName('');
-    setDietFormWeight('');
+    setDietFormWeightValue('100');
+    setDietFormWeightUnit('g');
     setDietModalServings(2.5);
   };
 
@@ -2685,6 +3758,7 @@ const RecipeBook: React.FC<{
       onAddFoodToSettings={onAddFoodToSettings}
       initialData={editingRecipe || undefined}
       foodCategories={foodCategories}
+      settings={settings}
     />
   );
 
@@ -2839,12 +3913,12 @@ const RecipeBook: React.FC<{
 
           <div className="bg-white p-6 rounded-[32px] border border-purple-100 shadow-sm space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-              {dietRecipes.length === 0 ? (
+              {sortedDietRecipes.length === 0 ? (
                 <div className="col-span-full py-10 text-center text-gray-400 italic font-medium">
                   Aucune recette régime enregistrée.
                 </div>
               ) : (
-                dietRecipes.map((dr) => {
+                sortedDietRecipes.map((dr) => {
                   const baseServings = dr.servings || 2.5;
                   const currentServings = dietServings || 2.5;
 
@@ -2871,6 +3945,20 @@ const RecipeBook: React.FC<{
                   }
 
                   if (itemsToDisplay.length > 0) {
+                    const categoryOrderMap: Record<string, number> = {
+                      'Protéines': 0,
+                      'Légumes': 1,
+                      'Féculents': 2,
+                      'Desserts': 3
+                    };
+                    itemsToDisplay.sort((a, b) => {
+                      const catA = resolveDietFoodCategory(a.name, a.category);
+                      const catB = resolveDietFoodCategory(b.name, b.category);
+                      const orderA = categoryOrderMap[catA] !== undefined ? categoryOrderMap[catA] : 99;
+                      const orderB = categoryOrderMap[catB] !== undefined ? categoryOrderMap[catB] : 99;
+                      return orderA - orderB;
+                    });
+
                     displayIngredients = (
                       <div className="flex flex-wrap gap-1.5 pt-0.5">
                         {itemsToDisplay.map((item, idx) => {
@@ -3013,6 +4101,14 @@ const RecipeBook: React.FC<{
                 className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl font-medium text-sm outline-none focus:ring-2 focus:ring-purple-200 flex-1 md:w-48"
               />
               <button 
+                onClick={() => setShowRoundingSettingsModal(true)} 
+                className="bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 px-4 py-2.5 rounded-2xl font-black transition-all flex items-center justify-center gap-2 active:scale-95 shadow-sm"
+                title="Configurer l'arrondi des unités indivisibles (pots, pièces, œufs, etc.)"
+              >
+                <span>⚙️</span>
+                <span>Gérer les arrondis</span>
+              </button>
+              <button 
                 onClick={() => handleOpenAddDiet('Protéines')} 
                 className="bg-purple-600 text-white px-6 py-2.5 rounded-2xl font-black shadow-lg shadow-purple-100 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2"
               >
@@ -3067,7 +4163,7 @@ const RecipeBook: React.FC<{
                     </div>
                     <div className="col-span-4 text-right">
                       <span className="inline-block bg-red-100 text-red-800 font-black text-xs px-2.5 py-1 rounded-xl border border-red-200" title={`Base (2.5 pers.): ${item.weight}`}>
-                        {formatScaledWeight(item.weight, dietServings, 2.5)}
+                        {formatScaledWeight(item.weight, dietServings, 2.5, settings, item.roundWeight)}
                       </span>
                     </div>
                     <div className="col-span-1 flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -3148,7 +4244,7 @@ const RecipeBook: React.FC<{
                     </div>
                     <div className="col-span-4 text-right">
                       <span className="inline-block bg-green-100 text-green-800 font-black text-xs px-2.5 py-1 rounded-xl border border-green-200" title={`Base (2.5 pers.): ${item.weight}`}>
-                        {formatScaledWeight(item.weight, dietServings, 2.5)}
+                        {formatScaledWeight(item.weight, dietServings, 2.5, settings, item.roundWeight)}
                       </span>
                     </div>
                     <div className="col-span-1 flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -3229,7 +4325,7 @@ const RecipeBook: React.FC<{
                     </div>
                     <div className="col-span-4 text-right">
                       <span className="inline-block bg-amber-100 text-amber-900 font-black text-xs px-2.5 py-1 rounded-xl border border-amber-300" title={`Base (2.5 pers.): ${item.weight}`}>
-                        {formatScaledWeight(item.weight, dietServings, 2.5)}
+                        {formatScaledWeight(item.weight, dietServings, 2.5, settings, item.roundWeight)}
                       </span>
                     </div>
                     <div className="col-span-1 flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -3310,7 +4406,7 @@ const RecipeBook: React.FC<{
                     </div>
                     <div className="col-span-4 text-right">
                       <span className="inline-block bg-pink-100 text-pink-900 font-black text-xs px-2.5 py-1 rounded-xl border border-pink-200" title={`Base (2.5 pers.): ${item.weight}`}>
-                        {formatScaledWeight(item.weight, dietServings, 2.5)}
+                        {formatScaledWeight(item.weight, dietServings, 2.5, settings, item.roundWeight)}
                       </span>
                     </div>
                     <div className="col-span-1 flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -3353,6 +4449,160 @@ const RecipeBook: React.FC<{
         </div>
       )}
 
+      {/* MODAL GÉRER LES ARRONDIS */}
+      {showRoundingSettingsModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 sm:p-6 animate-fadeIn">
+          <div className="bg-white rounded-[36px] sm:rounded-[40px] w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl animate-scaleUp overflow-hidden">
+            <div className="p-6 sm:p-8 text-center border-b border-gray-100 shrink-0 bg-purple-50/50">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-3xl bg-purple-100 text-purple-600 border border-purple-200 flex items-center justify-center mx-auto mb-4 text-3xl shadow-sm">
+                ⚙️
+              </div>
+              <h3 className="text-2xl font-black text-gray-900 mb-1 tracking-tight">
+                Gérer les arrondis
+              </h3>
+              <p className="text-gray-500 font-medium text-xs sm:text-sm">
+                Régime & portions des unités indivisibles
+              </p>
+            </div>
+
+            <div className="p-6 sm:p-8 space-y-6 overflow-y-auto">
+              {/* Option 1 : Activation de l'arrondi et sélection des unités */}
+              <div className="bg-purple-50/40 p-4 sm:p-5 rounded-2xl border border-purple-100 space-y-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.dietRoundDiscreteUnits ?? true}
+                    onChange={(e) => {
+                      if (setSettings) {
+                        setSettings(prev => ({ ...prev, dietRoundDiscreteUnits: e.target.checked }));
+                      }
+                    }}
+                    className="w-5 h-5 mt-0.5 rounded text-purple-600 focus:ring-purple-500 cursor-pointer accent-purple-600 shrink-0"
+                  />
+                  <div>
+                    <span className="text-sm font-black text-gray-800 block">
+                      Arrondir les unités indivisibles à l'entier
+                    </span>
+                    <span className="text-xs text-gray-500 font-medium block mt-0.5">
+                      Cochez les unités que vous souhaitez arrondir à l'entier lorsqu'elles sont multipliées.
+                    </span>
+                  </div>
+                </label>
+
+                {(settings.dietRoundDiscreteUnits ?? true) && (
+                  <div className="pt-2 border-t border-purple-100/80 space-y-2">
+                    <p className="text-xs font-black text-purple-900 uppercase tracking-wider">
+                      Unités à prendre en compte :
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto p-2 bg-white rounded-xl border border-purple-100 shadow-2xs">
+                      {getRoundingUnitsList(settings).map(unit => {
+                        const selectedUnits = settings.dietRoundingUnits && settings.dietRoundingUnits.length > 0
+                          ? settings.dietRoundingUnits
+                          : DEFAULT_DIET_ROUNDING_UNITS;
+                        const isChecked = selectedUnits.includes(unit);
+
+                        return (
+                          <label key={unit} className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-purple-50/60 transition-colors cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (setSettings) {
+                                  const updated = e.target.checked
+                                    ? [...selectedUnits, unit]
+                                    : selectedUnits.filter(u => u !== unit);
+                                  setSettings(prev => ({ ...prev, dietRoundingUnits: updated }));
+                                }
+                              }}
+                              className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer accent-purple-600 shrink-0"
+                            />
+                            <span className="text-xs font-bold text-gray-800 truncate" title={unit}>
+                              {unit}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Option 2 : Mode d'arrondi */}
+              <div className={`space-y-3 transition-opacity ${(settings.dietRoundDiscreteUnits ?? true) ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                <label className="text-xs font-black text-gray-700 uppercase tracking-wider block">
+                  Méthode d'arrondi :
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label
+                    className={`flex items-start gap-3 p-4 rounded-2xl border cursor-pointer transition-all ${
+                      (settings.dietRoundingMode || 'nearest') === 'nearest'
+                        ? 'bg-purple-50 border-purple-300 text-purple-900 ring-2 ring-purple-200'
+                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="dietRoundingMode"
+                      value="nearest"
+                      checked={(settings.dietRoundingMode || 'nearest') === 'nearest'}
+                      onChange={() => {
+                        if (setSettings) {
+                          setSettings(prev => ({ ...prev, dietRoundingMode: 'nearest' }));
+                        }
+                      }}
+                      className="w-4 h-4 mt-0.5 text-purple-600 focus:ring-purple-500 accent-purple-600 shrink-0"
+                    />
+                    <div>
+                      <span className="text-xs font-black block">Arrondi au plus proche</span>
+                      <span className="text-[11px] text-gray-500 font-medium block mt-0.5">
+                        Arrondi standard (ex: 1,2 → 1 pot ; 1,6 → 2 pots)
+                      </span>
+                    </div>
+                  </label>
+
+                  <label
+                    className={`flex items-start gap-3 p-4 rounded-2xl border cursor-pointer transition-all ${
+                      settings.dietRoundingMode === 'ceil'
+                        ? 'bg-purple-50 border-purple-300 text-purple-900 ring-2 ring-purple-200'
+                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="dietRoundingMode"
+                      value="ceil"
+                      checked={settings.dietRoundingMode === 'ceil'}
+                      onChange={() => {
+                        if (setSettings) {
+                          setSettings(prev => ({ ...prev, dietRoundingMode: 'ceil' }));
+                        }
+                      }}
+                      className="w-4 h-4 mt-0.5 text-purple-600 focus:ring-purple-500 accent-purple-600 shrink-0"
+                    />
+                    <div>
+                      <span className="text-xs font-black block">Arrondi supérieur</span>
+                      <span className="text-[11px] text-gray-500 font-medium block mt-0.5">
+                        Toujours à l'entier supérieur (ex: 1,2 → 2 pots)
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-6 bg-gray-50 border-t border-gray-100 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowRoundingSettingsModal(false)}
+                className="w-full sm:w-auto px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm rounded-2xl shadow-md transition-all active:scale-95 cursor-pointer"
+              >
+                Fermer & Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL SUPPRIMER DES RECETTES RÉGIME */}
       {showDeleteDietRecipesModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 sm:p-6 animate-fadeIn">
@@ -3368,12 +4618,38 @@ const RecipeBook: React.FC<{
                 Sélectionnez les recettes que vous souhaitez supprimer.
               </p>
             </div>
+
+            {sortedDietRecipes.length > 0 && (
+              <div className="px-6 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-2 shrink-0">
+                <span className="text-xs font-bold text-gray-500">
+                  {selectedDietRecipesToDelete.size} / {sortedDietRecipes.length} sélectionnée(s)
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedDietRecipesToDelete(new Set(sortedDietRecipes.map(r => r.id)));
+                    }}
+                    className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 text-xs font-black rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cocher tous
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedDietRecipesToDelete(new Set());
+                    }}
+                    className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    Décocher tous
+                  </button>
+                </div>
+              </div>
+            )}
             
             <div className="p-6 overflow-y-auto custom-scrollbar space-y-2">
-              {dietRecipes.length === 0 ? (
+              {sortedDietRecipes.length === 0 ? (
                 <div className="text-center py-8 text-gray-400 italic font-medium">Aucune recette enregistrée.</div>
               ) : (
-                dietRecipes.map(recipe => (
+                sortedDietRecipes.map(recipe => (
                   <label key={recipe.id} className="flex items-center gap-4 p-4 rounded-2xl border border-gray-100 hover:bg-red-50 hover:border-red-100 transition-colors cursor-pointer">
                     <input 
                       type="checkbox" 
@@ -3994,8 +5270,13 @@ const RecipeBook: React.FC<{
                     value={dietModalServings}
                     onChange={(e) => {
                       const newServings = parseFloat(e.target.value);
-                      if (dietFormWeight.trim()) {
-                        setDietFormWeight(prev => formatScaledWeight(prev, newServings, dietModalServings));
+                      if (dietFormWeightValue.trim()) {
+                        setDietFormWeightValue(prev => {
+                          const full = `${prev} ${dietFormWeightUnit}`;
+                          const scaled = formatScaledWeight(full, newServings, dietModalServings);
+                          const parsed = parseWeightAndUnit(scaled);
+                          return parsed.value;
+                        });
                       }
                       setDietModalServings(newServings);
                     }}
@@ -4009,19 +5290,45 @@ const RecipeBook: React.FC<{
                   </select>
                 </div>
 
-                {/* Champ Poids */}
+                {/* Champ Poids / Quantité et Unité */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-black text-purple-600 uppercase tracking-widest ml-1">
                     Poids / Portion (pour {dietModalServings.toString().replace('.', ',')} pers.)
                   </label>
-                  <input 
-                    type="text"
-                    value={dietFormWeight}
-                    onChange={(e) => setDietFormWeight(e.target.value)}
-                    placeholder="Ex: 150 g, 200 g, 2 pièces, 1 tranche..."
-                    className="w-full p-3.5 sm:p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-800 focus:border-purple-500 focus:bg-white transition-all outline-none"
-                    onKeyPress={(e) => e.key === 'Enter' && handleSaveDietItem()}
-                  />
+                  <div className="grid grid-cols-12 gap-2">
+                    <input 
+                      type="text"
+                      value={dietFormWeightValue}
+                      onChange={(e) => setDietFormWeightValue(e.target.value)}
+                      placeholder="Ex: 150, 2, 1..."
+                      className="col-span-7 p-3.5 sm:p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-800 focus:border-purple-500 focus:bg-white transition-all outline-none"
+                      onKeyPress={(e) => e.key === 'Enter' && handleSaveDietItem()}
+                    />
+                    <select
+                      value={dietFormWeightUnit}
+                      onChange={(e) => setDietFormWeightUnit(e.target.value)}
+                      className="col-span-5 p-3.5 sm:p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-800 focus:border-purple-500 focus:bg-white transition-all outline-none cursor-pointer"
+                    >
+                      {getAvailableUnits(settings).map(unit => (
+                        <option key={unit} value={unit}>
+                          {unit}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="pt-2 ml-1">
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={dietFormRoundWeight}
+                        onChange={(e) => setDietFormRoundWeight(e.target.checked)}
+                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer accent-purple-600"
+                      />
+                      <span className="text-xs font-bold text-gray-700">
+                        Arrondir le poids
+                      </span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -4839,7 +6146,8 @@ const RecipeForm: React.FC<{
   onAddFoodToSettings: (name: string, unit: string, category: string) => void;
   initialData?: Recipe;
   foodCategories: string[];
-}> = ({ onSave, onDelete, onCancel, foodPortions, onAddFoodToSettings, initialData, foodCategories }) => {
+  settings?: UserSettings;
+}> = ({ onSave, onDelete, onCancel, foodPortions, onAddFoodToSettings, initialData, foodCategories, settings }) => {
   const [formData, setFormData] = useState<Partial<Recipe>>(initialData || { 
     title: '', 
     servings: 4, 
@@ -5163,19 +6471,13 @@ const RecipeForm: React.FC<{
                 onChange={e => setPendingIng({ ...pendingIng, amount: Number(e.target.value) })} 
               />
               <select 
-                className="col-span-3 p-3.5 border border-gray-100 rounded-xl bg-gray-50 font-bold text-[10px] outline-none" 
+                className="col-span-3 p-3.5 border border-gray-100 rounded-xl bg-gray-50 font-bold text-[10px] outline-none cursor-pointer" 
                 value={pendingIng.unit} 
                 onChange={e => setPendingIng({ ...pendingIng, unit: e.target.value })}
               >
-                <option value="boite">boite</option>
-                <option value="C.à C">C.à C</option>
-                <option value="C.à S">C.à S</option>
-                <option value="cl">cl</option>
-                <option value="g">g</option>
-                <option value="kg">kg</option>
-                <option value="L">L</option>
-                <option value="ml">ml</option>
-                <option value="unité">u.</option>
+                {getAvailableUnits(settings).map(unit => (
+                  <option key={unit} value={unit}>{unit}</option>
+                ))}
               </select>
               <div className="col-span-6 relative">
                 <input 
@@ -5281,42 +6583,56 @@ const doesTargetMatchQuery = (targetText: string, query: string) => {
   );
 };
 
-const countRecipeMatches = (r: Recipe, searchTerms: string[], appliance: string): number => {
+const countRecipeMatches = (r: Recipe, searchTerms: string[], appliance: string, searchMode: 'ingredients' | 'recipes' = 'ingredients'): number => {
   if (appliance === 'Thermomix TM7' && !r.tags?.includes('TM7')) return 0;
   if (searchTerms.length === 0) return 0;
 
   let score = 0;
   for (const term of searchTerms) {
-    const matchesIng = (r.ingredients || []).some(ri => {
-      const ingName = ri.name || '';
-      return doesTargetMatchQuery(ingName, term);
-    });
-    if (matchesIng) {
-      score++;
+    if (searchMode === 'ingredients') {
+      const matchesIng = (r.ingredients || []).some(ri => {
+        const ingName = ri.name || '';
+        return doesTargetMatchQuery(ingName, term);
+      });
+      if (matchesIng) {
+        score++;
+      }
+    } else {
+      const matchesTitle = doesTargetMatchQuery(r.title || '', term) || normalizeSearchText(r.title || '').includes(normalizeSearchText(term));
+      if (matchesTitle) {
+        score++;
+      }
     }
   }
   return score;
 };
 
-const countDietRecipeMatches = (dr: DietRecipe, searchTerms: string[], appliance: string): number => {
+const countDietRecipeMatches = (dr: DietRecipe, searchTerms: string[], appliance: string, searchMode: 'ingredients' | 'recipes' = 'ingredients'): number => {
   if (appliance === 'Thermomix TM7') return 0;
   if (searchTerms.length === 0) return 0;
 
   let score = 0;
   for (const term of searchTerms) {
-    let matched = false;
-    if (dr.items && dr.items.length > 0) {
-      if (dr.items.some(item => doesTargetMatchQuery(item.name || '', term))) {
-        matched = true;
+    if (searchMode === 'ingredients') {
+      let matched = false;
+      if (dr.items && dr.items.length > 0) {
+        if (dr.items.some(item => doesTargetMatchQuery(item.name || '', term))) {
+          matched = true;
+        }
       }
-    }
-    if (!matched && dr.ingredients && typeof dr.ingredients === 'string') {
-      if (doesTargetMatchQuery(dr.ingredients, term)) {
-        matched = true;
+      if (!matched && dr.ingredients && typeof dr.ingredients === 'string') {
+        if (doesTargetMatchQuery(dr.ingredients, term)) {
+          matched = true;
+        }
       }
-    }
-    if (matched) {
-      score++;
+      if (matched) {
+        score++;
+      }
+    } else {
+      const matchesName = doesTargetMatchQuery(dr.name || '', term) || normalizeSearchText(dr.name || '').includes(normalizeSearchText(term));
+      if (matchesName) {
+        score++;
+      }
     }
   }
   return score;
@@ -5369,6 +6685,7 @@ const RecipeSearch: React.FC<{
   setSentMeals, 
   settings 
 }) => {
+  const [searchMode, setSearchMode] = useState<'ingredients' | 'recipes'>('ingredients');
   const [ingredients, setIngredients] = useState<string[]>([]);
   const [inputIng, setInputIng] = useState('');
   const [loading, setLoading] = useState(false);
@@ -5411,7 +6728,7 @@ const RecipeSearch: React.FC<{
     return startOfWeek;
   });
 
-  const DIET_UNITS_LIST = ['g', 'kg', 'ml', 'cl', 'l', 'cuillère(s)', 'c.à.s', 'c.à.c', 'pièce(s)', 'pincée(s)', 'tranche(s)', 'pot(s)', 'œufs'];
+  const DIET_UNITS_LIST = getAvailableUnits(settings);
 
   const handleOpenEditDietRecipe = (dr: DietRecipe) => {
     setEditingDietRecipe(dr);
@@ -5582,20 +6899,20 @@ const RecipeSearch: React.FC<{
   const results = useMemo(() => {
     if (activeSearchTerms.length === 0) return [];
     return recipes
-      .map(r => ({ recipe: r, score: countRecipeMatches(r, activeSearchTerms, appliance) }))
+      .map(r => ({ recipe: r, score: countRecipeMatches(r, activeSearchTerms, appliance, searchMode) }))
       .filter(item => item.score > 0)
       .sort((a, b) => b.score - a.score || (a.recipe.title || '').localeCompare(b.recipe.title || ''))
       .map(item => item.recipe);
-  }, [recipes, activeSearchTerms, appliance]);
+  }, [recipes, activeSearchTerms, appliance, searchMode]);
 
   const dietResults = useMemo(() => {
     if (activeSearchTerms.length === 0) return [];
     return (dietRecipes || [])
-      .map(dr => ({ recipe: dr, score: countDietRecipeMatches(dr, activeSearchTerms, appliance) }))
+      .map(dr => ({ recipe: dr, score: countDietRecipeMatches(dr, activeSearchTerms, appliance, searchMode) }))
       .filter(item => item.score > 0)
       .sort((a, b) => b.score - a.score || (a.recipe.name || '').localeCompare(b.recipe.name || ''))
       .map(item => item.recipe);
-  }, [dietRecipes, activeSearchTerms, appliance]);
+  }, [dietRecipes, activeSearchTerms, appliance, searchMode]);
 
   const handleSearch = () => {
     if (inputIng.trim()) {
@@ -5610,11 +6927,17 @@ const RecipeSearch: React.FC<{
   const appliances = ['Standard', 'Thermomix TM7'];
 
   const allFoodSuggestions = useMemo(() => {
+    if (searchMode === 'recipes') {
+      const list: string[] = [];
+      recipes.forEach(r => { if (r.title) list.push(r.title); });
+      (dietRecipes || []).forEach(dr => { if (dr.name) list.push(dr.name); });
+      return Array.from(new Set(list)).filter(Boolean).sort((a, b) => a.localeCompare(b));
+    }
     const list: string[] = [];
     (foodPortions || []).forEach(fp => { if (fp.name) list.push(fp.name); });
     (dietItems || []).forEach(di => { if (di.name) list.push(di.name); });
     return Array.from(new Set(list)).filter(Boolean).sort((a, b) => a.localeCompare(b));
-  }, [foodPortions, dietItems]);
+  }, [searchMode, recipes, dietRecipes, foodPortions, dietItems]);
 
   const matchingFoodSuggestions = useMemo(() => {
     if (!inputIng.trim()) return allFoodSuggestions;
@@ -5648,7 +6971,33 @@ const RecipeSearch: React.FC<{
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn pb-12">
-      <h2 className="text-3xl font-black text-center text-gray-800 tracking-tight">Recherche par Ingrédients</h2>
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <h2 className="text-3xl font-black text-center text-gray-800 tracking-tight">Recherche par :</h2>
+        <div className="bg-purple-100/80 p-1 rounded-2xl flex items-center gap-1 border border-purple-200 shadow-xs shrink-0">
+          <button
+            type="button"
+            onClick={() => setSearchMode('ingredients')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+              searchMode === 'ingredients'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-200'
+                : 'text-purple-800 hover:bg-purple-200/60'
+            }`}
+          >
+            🥕 Ingrédients
+          </button>
+          <button
+            type="button"
+            onClick={() => setSearchMode('recipes')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+              searchMode === 'recipes'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-200'
+                : 'text-purple-800 hover:bg-purple-200/60'
+            }`}
+          >
+            📖 Recettes
+          </button>
+        </div>
+      </div>
       
       <div className="bg-white p-8 border border-purple-50 rounded-[40px] shadow-sm space-y-8">
         <div className="space-y-3">
@@ -5669,7 +7018,9 @@ const RecipeSearch: React.FC<{
         </div>
 
         <div className="space-y-4">
-          <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">Ingrédients à disposition</p>
+          <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">
+            {searchMode === 'ingredients' ? 'Ingrédients à disposition' : 'Mots-clés / Noms recherchés'}
+          </p>
           <div className="flex gap-2 flex-wrap min-h-[40px]">
             {(ingredients || []).map(i => (
               <span key={i} className="bg-purple-50 text-purple-600 px-4 py-1.5 rounded-full text-sm font-bold border border-purple-100 flex items-center gap-2">
@@ -5684,7 +7035,7 @@ const RecipeSearch: React.FC<{
                 type="text"
                 list="food-suggestions-search"
                 className="flex-1 border-gray-100 border p-4 rounded-2xl outline-none focus:ring-2 focus:ring-purple-200 font-bold" 
-                placeholder="Ajouter un ingrédient..." 
+                placeholder={searchMode === 'ingredients' ? "Ajouter un ingrédient..." : "Ajouter un nom de recette (ex: salade, omelette)..."} 
                 value={inputIng} 
                 onChange={e => {
                   setInputIng(e.target.value);
@@ -5703,7 +7054,7 @@ const RecipeSearch: React.FC<{
                 type="button"
                 onClick={() => setShowSearchSuggestions(!showSearchSuggestions)}
                 className="px-3.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-2xl font-black text-xs transition-all cursor-pointer flex items-center gap-1.5"
-                title="Afficher la liste des aliments (15 visibles)"
+                title={`Afficher la liste des ${searchMode === 'ingredients' ? 'aliments' : 'recettes'} (15 visibles)`}
               >
                 <span>📋</span>
                 <span className="hidden sm:inline">15 visibles</span>
@@ -5724,12 +7075,12 @@ const RecipeSearch: React.FC<{
               </button>
             </div>
 
-            {/* LISTE DÉROULANTE INTERACTIVE - 15 ALIMENTS VISIBLES */}
+            {/* LISTE DÉROULANTE INTERACTIVE - 15 VISIBLES */}
             {showSearchSuggestions && matchingFoodSuggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-white border-2 border-purple-200 rounded-3xl shadow-2xl overflow-hidden animate-fadeIn">
                 <div className="p-3 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
                   <span className="text-xs font-black text-purple-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>🥗</span> Liste des aliments ({matchingFoodSuggestions.length} disponible{matchingFoodSuggestions.length > 1 ? 's' : ''} — 15 visibles) :
+                    <span>{searchMode === 'ingredients' ? '🥗' : '📖'}</span> Liste des {searchMode === 'ingredients' ? 'aliments' : 'recettes'} ({matchingFoodSuggestions.length} disponible{matchingFoodSuggestions.length > 1 ? 's' : ''} — 15 visibles) :
                   </span>
                   <button 
                     type="button" 
@@ -5792,7 +7143,7 @@ const RecipeSearch: React.FC<{
                     {r.tags?.includes('TM7') && <span className="bg-green-600 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest shadow-sm">TM7</span>}
                     {activeSearchTerms.length > 1 && (
                       <span className="bg-purple-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-sm">
-                        {countRecipeMatches(r, activeSearchTerms, appliance)}/{activeSearchTerms.length} ingr.
+                        {countRecipeMatches(r, activeSearchTerms, appliance, searchMode)}/{activeSearchTerms.length} {searchMode === 'ingredients' ? 'ingr.' : 'mot(s)'}
                       </span>
                     )}
                   </div>
@@ -5873,6 +7224,20 @@ const RecipeSearch: React.FC<{
 
               let displayIngredients: React.ReactNode = null;
               if (itemsToDisplay.length > 0) {
+                const categoryOrderMap: Record<string, number> = {
+                  'Protéines': 0,
+                  'Légumes': 1,
+                  'Féculents': 2,
+                  'Desserts': 3
+                };
+                itemsToDisplay.sort((a, b) => {
+                  const catA = resolveDietFoodCategory(a.name, a.category, dietItems, foodPortions);
+                  const catB = resolveDietFoodCategory(b.name, b.category, dietItems, foodPortions);
+                  const orderA = categoryOrderMap[catA] !== undefined ? categoryOrderMap[catA] : 99;
+                  const orderB = categoryOrderMap[catB] !== undefined ? categoryOrderMap[catB] : 99;
+                  return orderA - orderB;
+                });
+
                 displayIngredients = (
                   <div className="flex flex-wrap gap-1.5 pt-0.5">
                     {itemsToDisplay.map((item, idx) => {
@@ -6626,7 +7991,8 @@ const RecurringView: React.FC<{
   foodCategories: string[];
   onAddFoodToSettings: (name: string, unit: string, category: string) => void;
   onSendToShopping: (items: ShoppingListItem[]) => void;
-}> = ({ groups, setGroups, foodPortions, foodCategories, onAddFoodToSettings, onSendToShopping }) => {
+  settings?: UserSettings;
+}> = ({ groups, setGroups, foodPortions, foodCategories, onAddFoodToSettings, onSendToShopping, settings }) => {
   const [isAddingList, setIsAddingList] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [newListName, setNewListName] = useState('');
@@ -6880,14 +8246,9 @@ const RecurringView: React.FC<{
                      value={newItemUnit}
                      onChange={e => setNewItemUnit(e.target.value)}
                    >
-                     <option value="boite">boite</option>
-                     <option value="C.à S">C.à S</option>
-                     <option value="cl">cl</option>
-                     <option value="g">g</option>
-                     <option value="kg">kg</option>
-                     <option value="L">L</option>
-                     <option value="ml">ml</option>
-                     <option value="unité">u.</option>
+                     {getAvailableUnits(settings).map(unit => (
+                       <option key={unit} value={unit}>{unit}</option>
+                     ))}
                    </select>
                 </div>
                 <button onClick={addTempItem} className="sm:col-span-2 bg-purple-600 text-white p-4 rounded-2xl font-black shadow-lg shadow-purple-100 active:scale-95 transition-all">Ajouter</button>
@@ -6973,7 +8334,7 @@ const RecurringView: React.FC<{
                        <div className="flex items-center gap-1.5">
                          <input 
                            type="number"
-                           className="w-12 p-1 text-center font-black text-xs bg-purple-50 text-purple-600 rounded-lg outline-none focus:ring-1 focus:ring-purple-300 transition-all border border-transparent hover:border-purple-200"
+                           className="w-20 p-1 text-center font-black text-xs bg-purple-50 text-purple-600 rounded-lg outline-none focus:ring-1 focus:ring-purple-300 transition-all border border-transparent hover:border-purple-200"
                            value={item.amount}
                            onChange={(e) => updateItemAmount(group.id, item.id, Number(e.target.value))}
                            onFocus={(e) => e.target.select()}
@@ -7293,9 +8654,11 @@ const Planning: React.FC<{
   }, [dietItems, dietServings]);
 
   const dietRecipeOptions = useMemo(() => {
-    return (dietRecipes || []).map(dr => {
-      return { id: dr.id, title: dr.name };
-    });
+    return [...(dietRecipes || [])]
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' }))
+      .map(dr => {
+        return { id: dr.id, title: dr.name };
+      });
   }, [dietRecipes]);
 
   const handleSendDietRecipe = (date: string, mealType: 'dietLunch' | 'dietDinner', recipeId: string) => {
@@ -7375,37 +8738,80 @@ const Planning: React.FC<{
   };
 
   const handleSendDietItem = (date: string, mealType: 'dietLunch' | 'dietDinner', slot: 'protein' | 'vegetable' | 'starch' | 'dessert', itemId: string) => {
-    const item = (dietItems || []).find(i => i.id === itemId);
-    if (!item) return;
+    const ids = itemId.split(',').map(s => s.trim()).filter(Boolean);
+    if (ids.length === 0) return;
 
     const mealKey = `${date}-${mealType}-${slot}`;
     if (sentMeals.has(mealKey)) return;
 
     const currentServings = mealPlan[date]?.[mealType]?.servings ?? getDefaultDietServings(date, mealType === 'dietLunch' ? 'lunch' : 'dinner', settings);
 
-    let amount = 1;
-    let unit = 'g';
-    if (item.weight) {
-      const scaledStr = formatScaledWeight(item.weight, currentServings, 2.5);
-      const match = scaledStr.trim().match(/^([0-9]+(?:[.,][0-9]+)?)\s*(.*)$/);
-      if (match) {
-        amount = parseFloat(match[1].replace(',', '.')) || 1;
-        if (match[2]) unit = match[2].trim();
+    const itemsToSend: ShoppingListItem[] = [];
+    ids.forEach(id => {
+      const item = (dietItems || []).find(i => i.id === id || i.name.toLowerCase() === id.toLowerCase());
+      if (item) {
+        let amount = 1;
+        let unit = 'g';
+        if (item.weight) {
+          const scaledStr = formatScaledWeight(item.weight, currentServings, 2.5);
+          const match = scaledStr.trim().match(/^([0-9]+(?:[.,][0-9]+)?)\s*(.*)$/);
+          if (match) {
+            amount = parseFloat(match[1].replace(',', '.')) || 1;
+            if (match[2]) unit = match[2].trim();
+          } else {
+            unit = item.weight.trim();
+          }
+        }
+        itemsToSend.push({
+          id: Math.random().toString(36).substr(2, 9),
+          name: item.name,
+          amount,
+          unit,
+          checked: false
+        });
       } else {
-        unit = item.weight.trim();
+        itemsToSend.push({
+          id: Math.random().toString(36).substr(2, 9),
+          name: id,
+          amount: 1,
+          unit: 'portion',
+          checked: false
+        });
       }
+    });
+
+    if (itemsToSend.length > 0) {
+      onMergeToShopping(itemsToSend);
+      setSentMeals(prev => new Set(prev).add(mealKey));
     }
-
-    onMergeToShopping([{
-      id: Math.random().toString(36).substr(2, 9),
-      name: item.name,
-      amount,
-      unit,
-      checked: false
-    }]);
-
-    setSentMeals(prev => new Set(prev).add(mealKey));
   };
+
+  const isDietMealSent = useCallback((dateKey: string, mealTypeKey: 'dietLunch' | 'dietDinner'): boolean => {
+    const day = mealPlan[dateKey];
+    if (!day) return false;
+    const meal = day[mealTypeKey];
+    if (!meal) return false;
+
+    const hasProtein = Boolean(meal.protein);
+    const hasVegetable = Boolean(meal.vegetable);
+    const hasStarch = Boolean(meal.starch);
+    const hasDessert = Boolean(meal.dessert);
+    const hasRecipe = Boolean(meal.dietRecipe);
+
+    const hasAnyItem = hasProtein || hasVegetable || hasStarch || hasDessert || hasRecipe;
+    if (!hasAnyItem) return false;
+
+    if (sentMeals.has(`${dateKey}-${mealTypeKey}`)) return true;
+
+    const requiredKeys: string[] = [];
+    if (hasProtein) requiredKeys.push(`${dateKey}-${mealTypeKey}-protein`);
+    if (hasVegetable) requiredKeys.push(`${dateKey}-${mealTypeKey}-vegetable`);
+    if (hasStarch) requiredKeys.push(`${dateKey}-${mealTypeKey}-starch`);
+    if (hasDessert) requiredKeys.push(`${dateKey}-${mealTypeKey}-dessert`);
+    if (hasRecipe) requiredKeys.push(`${dateKey}-${mealTypeKey}-dietRecipe`);
+
+    return requiredKeys.length > 0 && requiredKeys.every(k => sentMeals.has(k));
+  }, [mealPlan, sentMeals]);
 
   // NOUVELLE FONCTION : TOUT ENVOYER AUX COURSES (RECETTES + RÉGIME)
   const handleSendAll = () => {
@@ -7448,33 +8854,45 @@ const Planning: React.FC<{
       if (dietLunch) {
         const lunchServings = dietLunch.servings ?? getDefaultDietServings(d, 'lunch', settings);
         (['protein', 'vegetable', 'starch', 'dessert'] as const).forEach(slot => {
-          const itemId = dietLunch[slot];
+          const slotVal = dietLunch[slot];
           const mealKey = `${key}-dietLunch-${slot}`;
-          if (itemId && !sentMeals.has(mealKey)) {
-            const item = (dietItems || []).find(i => i.id === itemId);
-            if (item) {
-              let amount = 1;
-              let unit = 'g';
-              if (item.weight) {
-                const scaledStr = formatScaledWeight(item.weight, lunchServings, 2.5);
-                const match = scaledStr.trim().match(/^([0-9]+(?:[.,][0-9]+)?)\s*(.*)$/);
-                if (match) {
-                  amount = parseFloat(match[1].replace(',', '.')) || 1;
-                  if (match[2]) unit = match[2].trim();
-                } else {
-                  unit = item.weight.trim();
+          if (slotVal && !sentMeals.has(mealKey)) {
+            const ids = slotVal.split(',').map(s => s.trim()).filter(Boolean);
+            ids.forEach(id => {
+              const item = (dietItems || []).find(i => i.id === id || i.name.toLowerCase() === id.toLowerCase());
+              if (item) {
+                let amount = 1;
+                let unit = 'g';
+                if (item.weight) {
+                  const scaledStr = formatScaledWeight(item.weight, lunchServings, 2.5);
+                  const match = scaledStr.trim().match(/^([0-9]+(?:[.,][0-9]+)?)\s*(.*)$/);
+                  if (match) {
+                    amount = parseFloat(match[1].replace(',', '.')) || 1;
+                    if (match[2]) unit = match[2].trim();
+                  } else {
+                    unit = item.weight.trim();
+                  }
                 }
+                allItems.push({
+                  id: Math.random().toString(36).substr(2, 9),
+                  name: item.name,
+                  amount,
+                  unit,
+                  checked: false
+                });
+                addedCount++;
+              } else {
+                allItems.push({
+                  id: Math.random().toString(36).substr(2, 9),
+                  name: id,
+                  amount: 1,
+                  unit: 'portion',
+                  checked: false
+                });
+                addedCount++;
               }
-              allItems.push({
-                id: Math.random().toString(36).substr(2, 9),
-                name: item.name,
-                amount,
-                unit,
-                checked: false
-              });
-              newSentMeals.add(mealKey);
-              addedCount++;
-            }
+            });
+            newSentMeals.add(mealKey);
           }
         });
 
@@ -7527,6 +8945,7 @@ const Planning: React.FC<{
             addedCount++;
           }
         }
+        newSentMeals.add(`${key}-dietLunch`);
       }
 
       // 3. Régime - Dîner
@@ -7534,33 +8953,45 @@ const Planning: React.FC<{
       if (dietDinner) {
         const dinnerServings = dietDinner.servings ?? getDefaultDietServings(d, 'dinner', settings);
         (['protein', 'vegetable', 'starch', 'dessert'] as const).forEach(slot => {
-          const itemId = dietDinner[slot];
+          const slotVal = dietDinner[slot];
           const mealKey = `${key}-dietDinner-${slot}`;
-          if (itemId && !sentMeals.has(mealKey)) {
-            const item = (dietItems || []).find(i => i.id === itemId);
-            if (item) {
-              let amount = 1;
-              let unit = 'g';
-              if (item.weight && typeof item.weight === 'string') {
-                const scaledStr = formatScaledWeight(item.weight, dinnerServings, 2.5);
-                const match = scaledStr.trim().match(/^([0-9]+(?:[.,][0-9]+)?)\s*(.*)$/);
-                if (match) {
-                  amount = parseFloat(match[1].replace(',', '.')) || 1;
-                  if (match[2]) unit = match[2].trim();
-                } else {
-                  unit = item.weight.trim();
+          if (slotVal && !sentMeals.has(mealKey)) {
+            const ids = slotVal.split(',').map(s => s.trim()).filter(Boolean);
+            ids.forEach(id => {
+              const item = (dietItems || []).find(i => i.id === id || i.name.toLowerCase() === id.toLowerCase());
+              if (item) {
+                let amount = 1;
+                let unit = 'g';
+                if (item.weight && typeof item.weight === 'string') {
+                  const scaledStr = formatScaledWeight(item.weight, dinnerServings, 2.5);
+                  const match = scaledStr.trim().match(/^([0-9]+(?:[.,][0-9]+)?)\s*(.*)$/);
+                  if (match) {
+                    amount = parseFloat(match[1].replace(',', '.')) || 1;
+                    if (match[2]) unit = match[2].trim();
+                  } else {
+                    unit = item.weight.trim();
+                  }
                 }
+                allItems.push({
+                  id: Math.random().toString(36).substr(2, 9),
+                  name: item.name,
+                  amount,
+                  unit,
+                  checked: false
+                });
+                addedCount++;
+              } else {
+                allItems.push({
+                  id: Math.random().toString(36).substr(2, 9),
+                  name: id,
+                  amount: 1,
+                  unit: 'portion',
+                  checked: false
+                });
+                addedCount++;
               }
-              allItems.push({
-                id: Math.random().toString(36).substr(2, 9),
-                name: item.name,
-                amount,
-                unit,
-                checked: false
-              });
-              newSentMeals.add(mealKey);
-              addedCount++;
-            }
+            });
+            newSentMeals.add(mealKey);
           }
         });
 
@@ -7613,6 +9044,7 @@ const Planning: React.FC<{
             addedCount++;
           }
         }
+        newSentMeals.add(`${key}-dietDinner`);
       }
 
       // 4. Extras: Viennoiseries & Sauces (dimanche)
@@ -7645,10 +9077,17 @@ const Planning: React.FC<{
       const aggregatedItems: ShoppingListItem[] = [];
       allItems.forEach(newItem => {
         const existing = aggregatedItems.find(
-          i => i.name.toLowerCase().trim() === newItem.name.toLowerCase().trim() && i.unit.toLowerCase().trim() === newItem.unit.toLowerCase().trim()
+          i => i.name.toLowerCase().trim() === newItem.name.toLowerCase().trim() && 
+               (i.unit.toLowerCase().trim() === newItem.unit.toLowerCase().trim() ||
+                convertUnitAmount(1, i.unit, newItem.unit) !== null)
         );
         if (existing) {
-          existing.amount = Math.round((existing.amount + newItem.amount) * 100) / 100;
+          const converted = convertUnitAmount(newItem.amount, newItem.unit, existing.unit);
+          if (converted !== null) {
+            existing.amount = Math.round((existing.amount + converted) * 1000) / 1000;
+          } else {
+            existing.amount = Math.round((existing.amount + newItem.amount) * 1000) / 1000;
+          }
         } else {
           aggregatedItems.push({ ...newItem });
         }
@@ -7919,9 +9358,6 @@ const Planning: React.FC<{
 
                 const getCategoryStyle = (cat: string) => {
                   const normalized = (cat || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                  if (normalized.includes('dessert') || normalized.includes('fruit') || normalized.includes('laitier') || normalized.includes('sucre') || normalized.includes('yaourt') || normalized.includes('compote') || normalized.includes('gateau') || normalized.includes('douceur') || normalized.includes('viennoiserie')) {
-                    return 'bg-pink-50 border-pink-200 text-pink-600';
-                  }
                   if (normalized.includes('prot') || normalized.includes('viande') || normalized.includes('poisson') || normalized.includes('charcuterie') || normalized.includes('oeuf') || normalized.includes('tofu')) {
                     return 'bg-red-50 border-red-200 text-red-600';
                   }
@@ -7931,21 +9367,10 @@ const Planning: React.FC<{
                   if (normalized.includes('fecul') || normalized.includes('starch') || normalized.includes('pain') || normalized.includes('cereale') || normalized.includes('riz') || normalized.includes('pate')) {
                     return 'bg-amber-50 border-amber-200 text-amber-700';
                   }
-                  return 'bg-pink-50 border-pink-200 text-pink-600';
-                };
-
-                const inferDietCategory = (nameOrPart: string): string => {
-                  const lower = (nameOrPart || '').toLowerCase();
-                  if (/yaourt|fromage blanc|fruit|pomme|banane|compote|dessert|fraise|kiwi|orange|poire|pêche|peche|abricot|framboise|mûre|myrtille|cerise|ananas|mangue|melon|pastèque|pasteque|raisin|crème|creme|flan|chocolat|miel|sucre|tarte|gâteau|gateau|mousse|glace|sorbet/i.test(lower)) return 'Desserts';
-                  const matchedDiet = (dietItems || []).find(di => lower.includes(di.name.toLowerCase()) || di.name.toLowerCase().includes(lower));
-                  if (matchedDiet && matchedDiet.category) return matchedDiet.category;
-                  const matchedPortion = (settings.foodPortions || []).find(fp => lower.includes(fp.name.toLowerCase()) || fp.name.toLowerCase().includes(lower));
-                  if (matchedPortion && matchedPortion.category) return matchedPortion.category;
-
-                  if (/poulet|boeuf|bœuf|veau|porc|dinde|jambon|poisson|saumon|thon|cabillaud|colin|oeuf|œuf|tofu|steak|viande|crevette|canard/i.test(lower)) return 'Protéines';
-                  if (/haricot|courgette|tomate|carotte|brocoli|salade|épinard|epinard|poivron|champignon|poireau|chou|concombre|aubergine|oignon|ail|échalote|echalote|radis|navet|céleri|celeri/i.test(lower)) return 'Légumes';
-                  if (/riz|pâte|pate|pomme de terre|patate|quinoa|boulgour|semoule|pain|lentille|pois chiche|avoine|fécule|fecule|blé|ble|maïs|mais|gnocchi/i.test(lower)) return 'Féculents';
-                  return 'Desserts';
+                  if (normalized.includes('dessert') || normalized.includes('fruit') || normalized.includes('laitier') || normalized.includes('sucre') || normalized.includes('yaourt') || normalized.includes('compote') || normalized.includes('gateau') || normalized.includes('douceur') || normalized.includes('viennoiserie')) {
+                    return 'bg-pink-50 border-pink-200 text-pink-600';
+                  }
+                  return 'bg-purple-50 border-purple-200 text-purple-700';
                 };
 
                 const getDietMealItems = (mealTypeKey: 'dietLunch' | 'dietDinner') => {
@@ -7985,7 +9410,7 @@ const Planning: React.FC<{
                       const baseServings = dr.servings || 2.5;
                       if (dr.items && dr.items.length > 0) {
                         dr.items.forEach(item => {
-                          const cat = item.category || inferDietCategory(item.name);
+                          const cat = resolveDietFoodCategory(item.name, item.category);
                           const scaledWeight = formatScaledWeight(item.weight, mealServings, baseServings);
                           res.push({
                             text: `${item.name}${scaledWeight ? ' ' + scaledWeight : ''}`,
@@ -7996,7 +9421,9 @@ const Planning: React.FC<{
                         const parts = dr.ingredients.split(/[+\n,;]/).map(p => p.trim()).filter(Boolean);
                         if (parts.length > 0) {
                           parts.forEach(part => {
-                            const cat = inferDietCategory(part);
+                            const match = part.match(/^(.*?)\s+([0-9]+(?:\.[0-9]+)?\s*(?:g|kg|cl|ml|cuillères|c\.à\.s|c\.à\.c|œufs|pièces)?)$/i);
+                            const ingName = match ? match[1].trim() : part.trim();
+                            const cat = resolveDietFoodCategory(ingName);
                             const scaledPart = scaleTextQuantity(part, mealServings, baseServings);
                             res.push({
                               text: scaledPart,
@@ -8017,6 +9444,19 @@ const Planning: React.FC<{
                       }
                     }
                   }
+
+                  const categoryOrderMap: Record<string, number> = {
+                    'Protéines': 0,
+                    'Légumes': 1,
+                    'Féculents': 2,
+                    'Desserts': 3
+                  };
+                  res.sort((a, b) => {
+                    const orderA = categoryOrderMap[a.category] !== undefined ? categoryOrderMap[a.category] : 99;
+                    const orderB = categoryOrderMap[b.category] !== undefined ? categoryOrderMap[b.category] : 99;
+                    return orderA - orderB;
+                  });
+
                   return res;
                 };
 
@@ -8025,21 +9465,58 @@ const Planning: React.FC<{
                 const lunchBadgeColor = getDietBadgeColor(d, 'lunch', settings);
                 const dinnerBadgeColor = getDietBadgeColor(d, 'dinner', settings);
 
+                const isLunchSent = isDietMealSent(key, 'dietLunch');
+                const isDinnerSent = isDietMealSent(key, 'dietDinner');
+
+                let dayCardBg = 'bg-blue-50/80 border-blue-100 text-blue-900';
+                let dayNameColor = 'text-blue-800';
+                let dateColor = 'text-blue-500';
+
+                if (isLunchSent && isDinnerSent) {
+                  dayCardBg = 'bg-green-100/90 border-green-300 text-green-900';
+                  dayNameColor = 'text-green-800';
+                  dateColor = 'text-green-700';
+                } else if (isLunchSent && !isDinnerSent) {
+                  dayCardBg = 'bg-gradient-to-b from-green-100/95 from-50% to-blue-50/80 to-50% border-green-200 text-gray-900';
+                  dayNameColor = 'text-green-900';
+                  dateColor = 'text-blue-700';
+                } else if (!isLunchSent && isDinnerSent) {
+                  dayCardBg = 'bg-gradient-to-b from-blue-50/80 from-50% to-green-100/95 to-50% border-green-200 text-gray-900';
+                  dayNameColor = 'text-blue-800';
+                  dateColor = 'text-green-800';
+                }
+
                 return (
                   <div key={key} className="grid grid-cols-1 md:grid-cols-[140px_1fr_1fr] gap-4 p-4 border border-gray-100 rounded-2xl bg-white hover:bg-gray-50/40 transition-all shadow-2xs items-start">
                     {/* Colonne Jour */}
-                    <div className="flex flex-col items-center justify-center bg-blue-50/80 border border-blue-100 text-blue-900 py-3 px-3 rounded-2xl text-center h-full min-h-[90px] shadow-2xs">
-                      <span className="font-black text-sm uppercase tracking-wide text-blue-800">{dayName}</span>
-                      <span className="text-[11px] font-bold text-blue-500 mt-1">{formattedDate}</span>
+                    <div className={`relative flex flex-col items-center justify-center border py-3 px-3 rounded-2xl text-center h-full min-h-[90px] shadow-2xs transition-all ${dayCardBg}`}>
+                      <span className={`font-black text-sm uppercase tracking-wide ${dayNameColor}`}>{dayName}</span>
+                      <span className={`text-[11px] font-bold mt-1 ${dateColor}`}>{formattedDate}</span>
+                      {(isLunchSent || isDinnerSent) && (
+                        <div className="flex items-center gap-1 mt-2 text-[9px] font-black">
+                          <span className={`px-1.5 py-0.5 rounded-md ${isLunchSent ? 'bg-green-200/90 text-green-800' : 'bg-blue-100 text-blue-600'}`}>
+                            Midi {isLunchSent ? '✓' : ''}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded-md ${isDinnerSent ? 'bg-green-200/90 text-green-800' : 'bg-blue-100 text-blue-600'}`}>
+                            Soir {isDinnerSent ? '✓' : ''}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Colonne Déjeuner */}
-                    <div className="space-y-3 bg-gray-50/50 p-3.5 rounded-2xl border border-gray-100">
-                      <div className="flex items-center justify-between border-b border-gray-200 pb-1.5 gap-2 flex-wrap">
+                    <div className={`space-y-3 p-3.5 rounded-2xl border transition-all ${isLunchSent ? 'bg-green-50/80 border-green-300 shadow-2xs' : 'bg-gray-50/50 border-gray-100'}`}>
+                      <div className="flex items-center justify-between border-b border-gray-200/80 pb-1.5 gap-2 flex-wrap">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-purple-700 uppercase tracking-wider">
+                          <span className={`text-xs font-black uppercase tracking-wider ${isLunchSent ? 'text-green-800' : 'text-purple-700'}`}>
                             Déjeuner
                           </span>
+                          {isLunchSent && (
+                            <span className="flex items-center gap-1 bg-green-100 text-green-700 border border-green-300 px-2 py-0.5 rounded-lg text-[10px] font-black shadow-2xs">
+                              <EXT_ICONS.Check />
+                              <span>Envoyé aux courses</span>
+                            </span>
+                          )}
                           <div className={`flex items-center gap-1.5 ${lunchBadgeColor.bg} px-2.5 py-1 rounded-xl border ${lunchBadgeColor.border} shadow-2xs`}>
                             <span className={`text-[11px] font-black ${lunchBadgeColor.text} whitespace-nowrap flex items-center gap-1`}>
                               <span>👥</span> <span>Pers. :</span>
@@ -8069,10 +9546,10 @@ const Planning: React.FC<{
                       
                       {/* Résumé d'aliments du Déjeuner */}
                       {lunchSummary.length > 0 ? (
-                        <div className="bg-blue-50/80 border border-blue-200/80 rounded-xl p-2.5 font-bold text-xs text-blue-950 flex flex-wrap items-center gap-1.5 shadow-2xs">
+                        <div className={`${isLunchSent ? 'bg-white/80 border-green-200' : 'bg-blue-50/80 border-blue-200/80'} border rounded-xl p-2.5 font-bold text-xs text-blue-950 flex flex-wrap items-center gap-1.5 shadow-2xs`}>
                           {lunchSummary.map((itemObj, idx) => (
                             <React.Fragment key={idx}>
-                              {idx > 0 && <span className="text-blue-400 font-black px-0.5">+</span>}
+                              {idx > 0 && <span className={`${isLunchSent ? 'text-green-600' : 'text-blue-400'} font-black px-0.5`}>+</span>}
                               <span className={`px-2 py-0.5 rounded-lg border font-black text-[11px] ${getCategoryStyle(itemObj.category)}`}>
                                 {itemObj.text}
                               </span>
@@ -8086,7 +9563,7 @@ const Planning: React.FC<{
                       {/* Sélecteurs Déjeuner */}
                       <div className="grid grid-cols-1 gap-2 pt-1 border-t border-gray-100">
                         <div className="space-y-0.5">
-                          <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1">
+                          <span className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${isLunchSent ? 'text-green-700' : 'text-blue-600'}`}>
                             <span>🍳</span> Recette Régime
                           </span>
                           <SearchableSelect
@@ -8094,19 +9571,26 @@ const Planning: React.FC<{
                             value={dayPlan.dietLunch?.dietRecipe || ''}
                             onChange={value => updateDietMealPlan(key, 'lunch', 'dietRecipe', value || undefined)}
                             placeholder="Sélectionner Recette..."
-                            selectedClassName="text-blue-600 font-bold"
+                            selectedClassName={isLunchSent ? 'text-green-800 font-bold' : 'text-blue-600 font-bold'}
+                            buttonClassName={isLunchSent && dayPlan.dietLunch?.dietRecipe ? 'bg-green-100/90 border-green-300 text-green-800' : undefined}
                           />
                         </div>
                       </div>
                     </div>
 
                     {/* Colonne Dîner */}
-                    <div className="space-y-3 bg-gray-50/50 p-3.5 rounded-2xl border border-gray-100">
-                      <div className="flex items-center justify-between border-b border-gray-200 pb-1.5 gap-2 flex-wrap">
+                    <div className={`space-y-3 p-3.5 rounded-2xl border transition-all ${isDinnerSent ? 'bg-green-50/80 border-green-300 shadow-2xs' : 'bg-gray-50/50 border-gray-100'}`}>
+                      <div className="flex items-center justify-between border-b border-gray-200/80 pb-1.5 gap-2 flex-wrap">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-purple-700 uppercase tracking-wider">
+                          <span className={`text-xs font-black uppercase tracking-wider ${isDinnerSent ? 'text-green-800' : 'text-purple-700'}`}>
                             Dîner
                           </span>
+                          {isDinnerSent && (
+                            <span className="flex items-center gap-1 bg-green-100 text-green-700 border border-green-300 px-2 py-0.5 rounded-lg text-[10px] font-black shadow-2xs">
+                              <EXT_ICONS.Check />
+                              <span>Envoyé aux courses</span>
+                            </span>
+                          )}
                           <div className={`flex items-center gap-1.5 ${dinnerBadgeColor.bg} px-2.5 py-1 rounded-xl border ${dinnerBadgeColor.border} shadow-2xs`}>
                             <span className={`text-[11px] font-black ${dinnerBadgeColor.text} whitespace-nowrap flex items-center gap-1`}>
                               <span>👥</span> <span>Pers. :</span>
@@ -8136,10 +9620,10 @@ const Planning: React.FC<{
 
                       {/* Résumé d'aliments du Dîner */}
                       {dinnerSummary.length > 0 ? (
-                        <div className="bg-blue-50/80 border border-blue-200/80 rounded-xl p-2.5 font-bold text-xs text-blue-950 flex flex-wrap items-center gap-1.5 shadow-2xs">
+                        <div className={`${isDinnerSent ? 'bg-white/80 border-green-200' : 'bg-blue-50/80 border-blue-200/80'} border rounded-xl p-2.5 font-bold text-xs text-blue-950 flex flex-wrap items-center gap-1.5 shadow-2xs`}>
                           {dinnerSummary.map((itemObj, idx) => (
                             <React.Fragment key={idx}>
-                              {idx > 0 && <span className="text-blue-400 font-black px-0.5">+</span>}
+                              {idx > 0 && <span className={`${isDinnerSent ? 'text-green-600' : 'text-blue-400'} font-black px-0.5`}>+</span>}
                               <span className={`px-2 py-0.5 rounded-lg border font-black text-[11px] ${getCategoryStyle(itemObj.category)}`}>
                                 {itemObj.text}
                               </span>
@@ -8153,7 +9637,7 @@ const Planning: React.FC<{
                       {/* Sélecteurs Dîner */}
                       <div className="grid grid-cols-1 gap-2 pt-1 border-t border-gray-100">
                         <div className="space-y-0.5">
-                          <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1">
+                          <span className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${isDinnerSent ? 'text-green-700' : 'text-blue-600'}`}>
                             <span>🍳</span> Recette Régime
                           </span>
                           <SearchableSelect
@@ -8161,7 +9645,8 @@ const Planning: React.FC<{
                             value={dayPlan.dietDinner?.dietRecipe || ''}
                             onChange={value => updateDietMealPlan(key, 'dinner', 'dietRecipe', value || undefined)}
                             placeholder="Sélectionner Recette..."
-                            selectedClassName="text-blue-600 font-bold"
+                            selectedClassName={isDinnerSent ? 'text-green-800 font-bold' : 'text-blue-600 font-bold'}
+                            buttonClassName={isDinnerSent && dayPlan.dietDinner?.dietRecipe ? 'bg-green-100/90 border-green-300 text-green-800' : undefined}
                           />
                         </div>
                       </div>
@@ -8730,22 +10215,30 @@ const Planning: React.FC<{
                             <span className="text-[8px] font-black uppercase text-amber-600 block ml-2">{label}</span>
                             <div className="space-y-2">
                               {(['protein', 'vegetable', 'starch', 'dessert'] as const).map(slot => {
-                                const itemId = dietObj[slot];
-                                if (!itemId) return null;
-                                const item = (dietItems || []).find(i => i.id === itemId);
-                                if (!item) return null;
+                                const slotVal = dietObj[slot];
+                                if (!slotVal) return null;
+                                const ids = slotVal.split(',').map(s => s.trim()).filter(Boolean);
+                                if (ids.length === 0) return null;
 
-                                const scaledWeight = formatScaledWeight(item.weight, dietServings, 2.5);
                                 const mealKey = `${dateStr}-${mealTypeKey}-${slot}`;
                                 const isSent = sentMeals.has(mealKey);
                                 const slotName = slot === 'protein' ? 'Protéines' : slot === 'vegetable' ? 'Légumes' : slot === 'starch' ? 'Féculents' : 'Desserts';
+
+                                const itemLabels = ids.map(id => {
+                                  const item = (dietItems || []).find(i => i.id === id || i.name.toLowerCase() === id.toLowerCase());
+                                  if (item) {
+                                    const scaledWeight = formatScaledWeight(item.weight, dietServings, 2.5);
+                                    return `${item.name}${scaledWeight ? ` (${scaledWeight})` : ''}`;
+                                  }
+                                  return id;
+                                }).join(' + ');
 
                                 return (
                                   <div key={slot} className="flex justify-between items-center p-3 bg-amber-50/30 rounded-2xl border border-amber-100">
                                     <div className="flex-1 min-w-0">
                                       <span className="text-[7px] font-black uppercase text-amber-600 block mb-0.5">{slotName}</span>
                                       <span className="font-black text-gray-800 text-sm truncate block">
-                                        {item.name} {scaledWeight ? `(${scaledWeight})` : ''}
+                                        {itemLabels}
                                       </span>
                                     </div>
                                     {isSent ? (
@@ -8754,7 +10247,7 @@ const Planning: React.FC<{
                                       </span>
                                     ) : (
                                       <button 
-                                        onClick={() => handleSendDietItem(dateStr, mealTypeKey, slot, item.id)} 
+                                        onClick={() => handleSendDietItem(dateStr, mealTypeKey, slot, slotVal)} 
                                         className="bg-amber-600 text-white p-2 rounded-xl hover:scale-105 transition-all shadow-sm shrink-0"
                                         title="Envoyer cet aliment aux courses"
                                       >
@@ -8857,10 +10350,188 @@ const Planning: React.FC<{
   );
 };
 
+export const getPortionRules = (fp: FoodPortion): PortionRule[] => {
+  if (fp.rules && Array.isArray(fp.rules) && fp.rules.length > 0) {
+    return fp.rules;
+  }
+  return [{
+    id: 'default-rule',
+    baseAmount: fp.baseAmount || fp.amount || 1,
+    baseUnit: fp.baseUnit || fp.unit || 'portion(s)',
+    purchaseAmount: fp.purchaseAmount || 1,
+    purchaseUnit: fp.purchaseUnit || 'pièce(s)',
+    minThreshold: undefined
+  }];
+};
+
+export function formatPortionConvertedDisplay(
+  itemName: string,
+  itemAmount: number,
+  itemUnit: string,
+  foodPortions: FoodPortion[]
+): { formatted: string; hasRule: boolean; purchaseAmount: number; purchaseUnit: string; originalText: string } {
+  const normName = itemName.trim().toLowerCase();
+  let fp = (foodPortions || []).find(p => p.name.trim().toLowerCase() === normName);
+  if (!fp) {
+    const normClean = normName.replace(/œ/g, 'oe').replace(/é|è|ê/g, 'e');
+    fp = (foodPortions || []).find(p => {
+      const pClean = p.name.trim().toLowerCase().replace(/œ/g, 'oe').replace(/é|è|ê/g, 'e');
+      return pClean === normClean || pClean.includes(normClean) || normClean.includes(pClean);
+    });
+  }
+
+  if (!fp) {
+    return {
+      formatted: `${itemAmount} ${itemUnit}`,
+      hasRule: false,
+      purchaseAmount: itemAmount,
+      purchaseUnit: itemUnit,
+      originalText: `${itemAmount} ${itemUnit}`
+    };
+  }
+
+  const rules = getPortionRules(fp);
+  if (!rules || rules.length === 0) {
+    return {
+      formatted: `${itemAmount} ${itemUnit}`,
+      hasRule: false,
+      purchaseAmount: itemAmount,
+      purchaseUnit: itemUnit,
+      originalText: `${itemAmount} ${itemUnit}`
+    };
+  }
+
+  const cleanItemUnit = itemUnit.trim().toLowerCase().replace(/\./g, '');
+  
+  // Recherche et conversion de toutes les règles candidates compatibles avec l'unité de l'article
+  interface CandidateTierRule {
+    rule: PortionRule;
+    effectiveAmountInBaseUnit: number;
+    threshold: number;
+  }
+
+  const candidates: CandidateTierRule[] = [];
+  rules.forEach(r => {
+    const rBaseUnit = (r.baseUnit || 'portion(s)').trim();
+    const cleanRBaseUnit = rBaseUnit.toLowerCase().replace(/\./g, '');
+    let amtInBase: number | null = null;
+
+    if (cleanItemUnit === cleanRBaseUnit) {
+      amtInBase = itemAmount;
+    } else {
+      amtInBase = convertUnitAmount(itemAmount, itemUnit, rBaseUnit);
+    }
+
+    if (amtInBase !== null && amtInBase > 0) {
+      const threshold = (typeof r.minThreshold === 'number' && !isNaN(r.minThreshold) && r.minThreshold > 0)
+        ? r.minThreshold
+        : (r.baseAmount || 1);
+      candidates.push({
+        rule: r,
+        effectiveAmountInBaseUnit: amtInBase,
+        threshold
+      });
+    }
+  });
+
+  if (candidates.length === 0) {
+    // Si aucune conversion d'unité possible, repli sur la première règle
+    const fallbackRule = rules[0];
+    const threshold = (typeof fallbackRule.minThreshold === 'number' && !isNaN(fallbackRule.minThreshold) && fallbackRule.minThreshold > 0)
+      ? fallbackRule.minThreshold
+      : (fallbackRule.baseAmount || 1);
+    candidates.push({
+      rule: fallbackRule,
+      effectiveAmountInBaseUnit: itemAmount,
+      threshold
+    });
+  }
+
+  // Filtrer les paliers qualifiés (où la quantité totale atteint ou dépasse le seuil)
+  const qualifying = candidates.filter(c => c.effectiveAmountInBaseUnit >= c.threshold);
+
+  let selectedCandidate: CandidateTierRule;
+  if (qualifying.length > 0) {
+    // On sélectionne le palier qualifié le plus élevé (seuil max ou baseAmount max)
+    qualifying.sort((a, b) => b.threshold - a.threshold || (b.rule.baseAmount || 1) - (a.rule.baseAmount || 1));
+    selectedCandidate = qualifying[0];
+  } else {
+    // Sinon on prend le plus petit palier de base
+    candidates.sort((a, b) => a.threshold - b.threshold || (a.rule.baseAmount || 1) - (b.rule.baseAmount || 1));
+    selectedCandidate = candidates[0];
+  }
+
+  const matchedRule = selectedCandidate.rule;
+  const effectiveAmountInBaseRuleUnit = selectedCandidate.effectiveAmountInBaseUnit;
+  const baseRuleAmount = matchedRule.baseAmount || 1;
+  const baseRuleUnit = matchedRule.baseUnit || 'portion(s)';
+  const purchaseRuleAmount = matchedRule.purchaseAmount || 1;
+  const purchaseRuleUnit = matchedRule.purchaseUnit || 'pièce(s)';
+
+  if (baseRuleAmount <= 0) {
+    return {
+      formatted: `${itemAmount} ${itemUnit}`,
+      hasRule: false,
+      purchaseAmount: itemAmount,
+      purchaseUnit: itemUnit,
+      originalText: `${itemAmount} ${itemUnit}`
+    };
+  }
+
+  const ratio = effectiveAmountInBaseRuleUnit / baseRuleAmount;
+  const totalPurchaseCount = Math.ceil(ratio) * purchaseRuleAmount;
+  const fullPurchaseCount = Math.floor(ratio) * purchaseRuleAmount;
+  const remainderBaseAmountInBaseRuleUnit = Math.round((effectiveAmountInBaseRuleUnit - (fullPurchaseCount / purchaseRuleAmount) * baseRuleAmount) * 1000) / 1000;
+
+  let remainderDisplayAmount = remainderBaseAmountInBaseRuleUnit;
+  let remainderDisplayUnit = baseRuleUnit;
+  const backVal = convertUnitAmount(remainderBaseAmountInBaseRuleUnit, baseRuleUnit, itemUnit);
+  if (backVal !== null) {
+    remainderDisplayAmount = Math.round(backVal * 100) / 100;
+    remainderDisplayUnit = itemUnit;
+  }
+
+  const formatUnit = (amt: number, u: string) => {
+    let clean = u.trim();
+    if (amt <= 1) {
+      clean = clean.replace(/\(s\)/gi, '')
+                   .replace(/\(x\)/gi, '')
+                   .replace(/\(es\)/gi, '')
+                   .replace(/\(e\)/gi, '');
+    } else {
+      clean = clean.replace(/\(s\)/gi, 's')
+                   .replace(/\(x\)/gi, 'x')
+                   .replace(/\(es\)/gi, 'es')
+                   .replace(/\(e\)/gi, 'e');
+    }
+    return `${amt} ${clean.trim()}`;
+  };
+
+  let formatted = '';
+
+  if (fullPurchaseCount === 0 || remainderBaseAmountInBaseRuleUnit <= 0.0001) {
+    formatted = formatUnit(totalPurchaseCount, purchaseRuleUnit);
+  } else {
+    const totalText = formatUnit(totalPurchaseCount, purchaseRuleUnit);
+    const fullText = formatUnit(fullPurchaseCount, purchaseRuleUnit);
+    const remainderText = formatUnit(remainderDisplayAmount, remainderDisplayUnit);
+    formatted = `${totalText} (${fullText} et ${remainderText})`;
+  }
+
+  return {
+    formatted,
+    hasRule: true,
+    purchaseAmount: totalPurchaseCount,
+    purchaseUnit: purchaseRuleUnit,
+    originalText: `${itemAmount} ${itemUnit}`
+  };
+}
+
 const ShoppingView: React.FC<{ 
   list: ShoppingListItem[]; 
   setList: React.Dispatch<React.SetStateAction<ShoppingListItem[]>>; 
   settings: UserSettings;
+  setSettings?: React.Dispatch<React.SetStateAction<UserSettings>>;
   foodPortions: FoodPortion[];
   foodCategories: string[];
   onAddFoodToSettings: (name: string, unit: string, category: string) => void;
@@ -8868,7 +10539,8 @@ const ShoppingView: React.FC<{
   setReserveItems: React.Dispatch<React.SetStateAction<ShoppingListItem[]>>;
   pantryGroups: PantryGroup[];
   setPantryGroups: React.Dispatch<React.SetStateAction<PantryGroup[]>>;
-}> = ({ list, setList, settings, foodPortions, foodCategories, onAddFoodToSettings, reserveItems, setReserveItems, pantryGroups, setPantryGroups }) => {
+  dietItems?: DietItem[];
+}> = ({ list, setList, settings, setSettings, foodPortions, foodCategories, onAddFoodToSettings, reserveItems, setReserveItems, pantryGroups, setPantryGroups, dietItems }) => {
   const [showSummary, setShowSummary] = useState(false);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [checkedSummaryItems, setCheckedSummaryItems] = useState<Set<string>>(new Set());
@@ -8876,6 +10548,353 @@ const ShoppingView: React.FC<{
   const [showNewFoodModal, setShowNewFoodModal] = useState(false);
   const [newFoodCategory, setNewFoodCategory] = useState<string>(foodCategories[0] || 'Épicerie');
   const [selectedMatchModeShopping, setSelectedMatchModeShopping] = useState<string>('__NEW__');
+
+  // Portion configuration states
+  const [showPortionsConfigModal, setShowPortionsConfigModal] = useState(false);
+  const [portionSearchQuery, setPortionSearchQuery] = useState('');
+  const [showPortionsExportImportModal, setShowPortionsExportImportModal] = useState(false);
+  const [showClearAllPortionsModal, setShowClearAllPortionsModal] = useState(false);
+  const [portionsImportStatus, setPortionsImportStatus] = useState<string | null>(null);
+  const [showAddPortionFoodModal, setShowAddPortionFoodModal] = useState(false);
+  const [portionFoodName, setPortionFoodName] = useState('');
+  const [portionCategory, setPortionCategory] = useState<string>('Épicerie');
+  const [portionRules, setPortionRules] = useState<PortionRule[]>([
+    { id: '1', baseAmount: 7, baseUnit: 'portion(s)', purchaseAmount: 1, purchaseUnit: 'pièce(s)' }
+  ]);
+  const [portionToDelete, setPortionToDelete] = useState<FoodPortion | null>(null);
+
+  const exportPortionsToExcel = () => {
+    const XLSX = (window as any).XLSX;
+    if (!XLSX) {
+      alert("La bibliothèque Excel n'est pas disponible.");
+      return;
+    }
+    const today = new Date().toISOString().split('T')[0];
+    const workbook = XLSX.utils.book_new();
+
+    // Sheet 1: Portions
+    const portionsData: any[] = [];
+    (foodPortions || []).forEach(item => {
+      const rules = getPortionRules(item);
+      rules.forEach(r => {
+        portionsData.push({
+          "Aliment": item.name || '',
+          "Catégorie": item.category || "Sans catégorie",
+          "Quantité base": r.baseAmount || 1,
+          "Unité base": r.baseUnit || 'portion(s)',
+          "Quantité achat": r.purchaseAmount || 1,
+          "Unité achat": r.purchaseUnit || 'pièce(s)',
+          "Seuil min": r.minThreshold || ''
+        });
+      });
+    });
+
+    const wsPortions = XLSX.utils.json_to_sheet(portionsData);
+    XLSX.utils.book_append_sheet(workbook, wsPortions, "Portions");
+
+    // Sheet 2: Unités Portions
+    const portionUnitsData = getAvailablePortionUnits(settings).map(u => ({
+      "Unité": u,
+      "Type": (settings?.customPortionUnits || []).includes(u) ? "Personnalisée" : "Standard"
+    }));
+    const wsPortionUnits = XLSX.utils.json_to_sheet(portionUnitsData);
+    XLSX.utils.book_append_sheet(workbook, wsPortionUnits, "Unités Portions");
+
+    XLSX.writeFile(workbook, `culinashare_portions_${today}.xlsx`);
+  };
+
+  const importPortionsFromExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const XLSX = (window as any).XLSX;
+    const file = e.target.files?.[0];
+    if (!file || !XLSX) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+
+        const sheetName = wb.SheetNames.find((s: string) => s.toLowerCase().includes("portion") && !s.toLowerCase().includes("unit")) 
+          || wb.SheetNames.find((s: string) => s.toLowerCase().includes("aliment") && !s.toLowerCase().includes("unit")) 
+          || wb.SheetNames[0];
+
+        if (!sheetName || !wb.Sheets[sheetName]) {
+          alert("Aucune feuille de données valide trouvée dans le fichier Excel.");
+          return;
+        }
+
+        // Process Unités Portions if present
+        const portionUnitsSheet = wb.SheetNames.find((s: string) => 
+          s.toLowerCase().includes("unit") && s.toLowerCase().includes("portion")
+        );
+        let customPortionUnitsFromExcel: string[] = [];
+        let portionUnitsListFromExcel: string[] = [];
+        if (portionUnitsSheet) {
+          const wsUnits = wb.Sheets[portionUnitsSheet];
+          const unitsData = XLSX.utils.sheet_to_json(wsUnits) as any[];
+          unitsData.forEach(row => {
+            const unitName = (row["Unité"] || row["unité"] || row["Unite"] || row["unite"] || row["Unit"] || row["unit"] || "").toString().trim();
+            const type = (row["Type"] || row["type"] || "").toString().trim().toLowerCase();
+            if (unitName) {
+              if (!portionUnitsListFromExcel.includes(unitName)) {
+                portionUnitsListFromExcel.push(unitName);
+              }
+              if (type.includes("personnalis") || !MASTER_PORTION_UNITS.includes(unitName)) {
+                if (!customPortionUnitsFromExcel.includes(unitName)) {
+                  customPortionUnitsFromExcel.push(unitName);
+                }
+              }
+            }
+          });
+        }
+
+        const ws = wb.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+        if (!data || data.length === 0) {
+          alert("Le fichier Excel sélectionné est vide.");
+          return;
+        }
+
+        let updatedCount = 0;
+
+        if (setSettings) {
+          setSettings(prev => {
+            const current = [...(prev.foodPortions || [])];
+            let updatedCustomPortionUnits = [...(prev.customPortionUnits || [])];
+            let updatedPortionUnitsList = prev.portionUnitsList ? [...prev.portionUnitsList] : undefined;
+
+            if (portionUnitsListFromExcel.length > 0) {
+              updatedPortionUnitsList = Array.from(new Set([...(updatedPortionUnitsList || MASTER_PORTION_UNITS), ...portionUnitsListFromExcel]));
+            }
+            customPortionUnitsFromExcel.forEach(u => {
+              if (!updatedCustomPortionUnits.includes(u)) {
+                updatedCustomPortionUnits.push(u);
+              }
+            });
+
+            const foodsMap = new Map<string, { name: string; category: string; rules: PortionRule[] }>();
+
+            data.forEach(row => {
+              const foodName = (row.Aliment || row.aliment || row.ALIMENT || row.Name || row.name || row.Article || row.article || "").toString().trim();
+              if (!foodName) return;
+
+              const category = (row.Catégorie || row.catégorie || row.CATEGORIE || row.Category || row.category || "").toString().trim();
+              const baseAmountRaw = row["Quantité base"] ?? row["quantité base"] ?? row.baseAmount ?? row["Quantité Base"] ?? row.amount ?? row.Quantité ?? 1;
+              const baseAmount = Number(baseAmountRaw);
+              const baseUnit = (row["Unité base"] || row["unité base"] || row.baseUnit || row["Unité Base"] || row.unit || row.Unité || "portion(s)").toString().trim();
+              const purchaseAmountRaw = row["Quantité achat"] ?? row["quantité achat"] ?? row.purchaseAmount ?? row["Quantité Achat"] ?? 1;
+              const purchaseAmount = Number(purchaseAmountRaw);
+              const purchaseUnit = (row["Unité achat"] || row["unité achat"] || row.purchaseUnit || row["Unité Achat"] || "pièce(s)").toString().trim();
+              const minThresholdRaw = row["Seuil min"] ?? row["seuil min"] ?? row["Seuil Min"] ?? row["Seuil"] ?? row.minThreshold ?? row.threshold;
+              const minThresholdNum = Number(minThresholdRaw);
+              const minThreshold = !isNaN(minThresholdNum) && minThresholdNum > 0 ? minThresholdNum : undefined;
+
+              const key = foodName.toLowerCase();
+              const rule: PortionRule = {
+                id: Math.random().toString(36).substr(2, 9),
+                baseAmount: isNaN(baseAmount) || baseAmount <= 0 ? 1 : baseAmount,
+                baseUnit: baseUnit || 'portion(s)',
+                purchaseAmount: isNaN(purchaseAmount) || purchaseAmount <= 0 ? 1 : purchaseAmount,
+                purchaseUnit: purchaseUnit || 'pièce(s)',
+                minThreshold: minThreshold
+              };
+
+              if (!foodsMap.has(key)) {
+                foodsMap.set(key, {
+                  name: foodName,
+                  category: category && category !== "Sans catégorie" ? category : 'Épicerie',
+                  rules: [rule]
+                });
+              } else {
+                const existingEntry = foodsMap.get(key)!;
+                if (category && category !== "Sans catégorie") existingEntry.category = category;
+                const dupIdx = existingEntry.rules.findIndex(r => 
+                  r.baseUnit.toLowerCase() === rule.baseUnit.toLowerCase() && 
+                  r.baseAmount === rule.baseAmount && 
+                  r.purchaseUnit.toLowerCase() === rule.purchaseUnit.toLowerCase()
+                );
+                if (dupIdx >= 0) {
+                  existingEntry.rules[dupIdx] = rule;
+                } else {
+                  existingEntry.rules.push(rule);
+                }
+              }
+            });
+
+            foodsMap.forEach(entry => {
+              const idx = current.findIndex(p => p.name.trim().toLowerCase() === entry.name.toLowerCase());
+              const firstRule = entry.rules[0] || {
+                id: Math.random().toString(36).substr(2, 9),
+                baseAmount: 1,
+                baseUnit: 'portion(s)',
+                purchaseAmount: 1,
+                purchaseUnit: 'pièce(s)',
+                minThreshold: undefined
+              };
+
+              const updatedItem: FoodPortion = {
+                id: idx >= 0 ? current[idx].id : Math.random().toString(36).substr(2, 9),
+                name: entry.name,
+                category: entry.category || (idx >= 0 ? current[idx].category : 'Épicerie'),
+                baseAmount: firstRule.baseAmount,
+                baseUnit: firstRule.baseUnit,
+                purchaseAmount: firstRule.purchaseAmount,
+                purchaseUnit: firstRule.purchaseUnit,
+                amount: firstRule.baseAmount,
+                unit: firstRule.baseUnit,
+                rules: entry.rules
+              };
+
+              if (idx >= 0) {
+                current[idx] = updatedItem;
+              } else {
+                current.push(updatedItem);
+              }
+              updatedCount++;
+            });
+
+            return {
+              ...prev,
+              foodPortions: current,
+              customPortionUnits: updatedCustomPortionUnits,
+              portionUnitsList: updatedPortionUnitsList
+            };
+          });
+
+          setPortionsImportStatus(`${updatedCount} aliment(s) et portions importé(s) / mis à jour avec succès !`);
+          setTimeout(() => setPortionsImportStatus(null), 5000);
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Erreur lors de la lecture du fichier Excel.");
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = '';
+  };
+
+  const allAvailableFoods = useMemo(() => {
+    const names = new Set<string>();
+    (foodPortions || []).forEach(f => f.name && names.add(f.name.trim()));
+    (dietItems || []).forEach(d => d.name && names.add(d.name.trim()));
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [foodPortions, dietItems]);
+
+  const configuredPortions = useMemo(() => {
+    return (foodPortions || [])
+      .filter(p => p.name && p.name.trim().length > 0)
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+  }, [foodPortions]);
+
+  const handleSelectFoodForPortion = (foodName: string) => {
+    setPortionFoodName(foodName);
+    const existing = (foodPortions || []).find(p => p.name.trim().toLowerCase() === foodName.trim().toLowerCase());
+    if (existing) {
+      const existingRules = getPortionRules(existing);
+      setPortionRules(existingRules.map(r => ({ ...r, id: r.id || Math.random().toString(36).substr(2, 9), minThreshold: r.minThreshold })));
+      setPortionCategory(existing.category || 'Épicerie');
+    }
+  };
+
+  const handleAddRuleRow = () => {
+    setPortionRules(prev => [
+      ...prev,
+      {
+        id: Math.random().toString(36).substr(2, 9),
+        baseAmount: 1,
+        baseUnit: 'portion(s)',
+        purchaseAmount: 1,
+        purchaseUnit: 'pièce(s)',
+        minThreshold: undefined
+      }
+    ]);
+  };
+
+  const handleRemoveRuleRow = (ruleId: string) => {
+    if (portionRules.length <= 1) return;
+    setPortionRules(prev => prev.filter(r => r.id !== ruleId));
+  };
+
+  const handleUpdateRuleRow = (ruleId: string, field: keyof PortionRule, value: any) => {
+    setPortionRules(prev => prev.map(r => {
+      if (r.id === ruleId) {
+        return { ...r, [field]: value };
+      }
+      return r;
+    }));
+  };
+
+  const handleSavePortionRule = () => {
+    if (!portionFoodName.trim()) return;
+    const name = portionFoodName.trim();
+    if (setSettings) {
+      setSettings(prev => {
+        const current = prev.foodPortions || [];
+        const norm = name.toLowerCase();
+        const idx = current.findIndex(p => p.name.trim().toLowerCase() === norm);
+
+        const validRules: PortionRule[] = (portionRules.length > 0 ? portionRules : [{
+          id: Math.random().toString(36).substr(2, 9),
+          baseAmount: 1,
+          baseUnit: 'portion(s)',
+          purchaseAmount: 1,
+          purchaseUnit: 'pièce(s)',
+          minThreshold: undefined
+        }]).map(r => ({
+          id: r.id || Math.random().toString(36).substr(2, 9),
+          baseAmount: isNaN(r.baseAmount) || r.baseAmount <= 0 ? 1 : Number(r.baseAmount),
+          baseUnit: r.baseUnit || 'portion(s)',
+          purchaseAmount: isNaN(r.purchaseAmount) || r.purchaseAmount <= 0 ? 1 : Number(r.purchaseAmount),
+          purchaseUnit: r.purchaseUnit || 'pièce(s)',
+          minThreshold: (r.minThreshold !== undefined && r.minThreshold !== null && !isNaN(Number(r.minThreshold)) && Number(r.minThreshold) > 0) ? Number(r.minThreshold) : undefined
+        }));
+
+        const firstRule = validRules[0];
+        const updatedItem: FoodPortion = {
+          id: idx >= 0 ? current[idx].id : Math.random().toString(36).substr(2, 9),
+          name: name,
+          amount: firstRule.baseAmount,
+          unit: firstRule.baseUnit,
+          category: portionCategory || (idx >= 0 ? current[idx].category : 'Épicerie'),
+          baseAmount: firstRule.baseAmount,
+          baseUnit: firstRule.baseUnit,
+          purchaseAmount: firstRule.purchaseAmount,
+          purchaseUnit: firstRule.purchaseUnit,
+          rules: validRules
+        };
+
+        let nextPortions = [...current];
+        if (idx >= 0) {
+          nextPortions[idx] = updatedItem;
+        } else {
+          nextPortions.push(updatedItem);
+        }
+        return { ...prev, foodPortions: nextPortions };
+      });
+    }
+    setShowAddPortionFoodModal(false);
+    setPortionFoodName('');
+  };
+
+  const handleDeletePortionRule = (foodId: string) => {
+    if (setSettings) {
+      setSettings(prev => ({
+        ...prev,
+        foodPortions: (prev.foodPortions || []).filter(p => p.id !== foodId)
+      }));
+    }
+  };
+
+  const handleClearAllPortions = () => {
+    if (setSettings) {
+      setSettings(prev => ({
+        ...prev,
+        foodPortions: []
+      }));
+    }
+    setShowClearAllPortionsModal(false);
+  };
 
   const [newItemName, setNewItemName] = useState('');
   const [newItemAmount, setNewItemAmount] = useState(1);
@@ -8968,17 +10987,25 @@ const ShoppingView: React.FC<{
   }, [list]);
 
   const consolidatedList = useMemo(() => {
-    const map = new Map<string, ShoppingListItem>();
+    const listCopy: ShoppingListItem[] = [];
     (list || []).forEach(item => {
-      const key = `${item.name.toLowerCase()}_${item.unit.toLowerCase()}`;
-      if (map.has(key)) {
-        const existing = map.get(key)!;
-        existing.amount += item.amount;
+      const existing = listCopy.find(
+        i => i.name.toLowerCase().trim() === item.name.toLowerCase().trim() && 
+          (i.unit.toLowerCase().trim() === item.unit.toLowerCase().trim() ||
+           convertUnitAmount(1, i.unit, item.unit) !== null)
+      );
+      if (existing) {
+        const converted = convertUnitAmount(item.amount, item.unit, existing.unit);
+        if (converted !== null) {
+          existing.amount = roundShoppingAmount(existing.amount + converted, existing.unit);
+        } else {
+          existing.amount = roundShoppingAmount(existing.amount + item.amount, existing.unit);
+        }
       } else {
-        map.set(key, { ...item, id: Math.random().toString(36).substr(2, 9) });
+        listCopy.push({ ...item, amount: roundShoppingAmount(item.amount, item.unit), id: item.id || Math.random().toString(36).substr(2, 9) });
       }
     });
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return listCopy.sort((a, b) => a.name.localeCompare(b.name));
   }, [list]);
 
   const toggleSummaryCheck = (id: string) => {
@@ -8991,13 +11018,19 @@ const ShoppingView: React.FC<{
   const groupedConsolidatedList = useMemo(() => {
     const groups: Record<string, ShoppingListItem[]> = {};
     consolidatedList.forEach(item => {
-      const portion = foodPortions.find(p => p.name.toLowerCase() === item.name.toLowerCase());
-      const cat = portion?.category || 'Autres';
+      const portion = (foodPortions || []).find(p => p.name.trim().toLowerCase() === item.name.trim().toLowerCase());
+      const cat = portion?.category || detectSettingsCategoryFromFoodName(item.name);
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(item);
     });
     return groups;
   }, [consolidatedList, foodPortions]);
+
+  const summaryCategories = useMemo(() => {
+    const defaultCats = settings.foodCategories || FOOD_CATEGORIES;
+    const extraCats = Object.keys(groupedConsolidatedList).filter(c => !defaultCats.includes(c));
+    return [...defaultCats, ...extraCats];
+  }, [settings.foodCategories, groupedConsolidatedList]);
 
   return (
     <div className={`mx-auto space-y-8 animate-fadeIn pb-32 px-2 relative transition-all duration-300 ${showReserveOnSide ? 'max-w-5xl' : 'max-w-2xl'}`}>
@@ -9009,12 +11042,21 @@ const ShoppingView: React.FC<{
               {(list || []).filter(i => !i.checked).length}/{(list || []).length} articles en attente
             </p>
           </div>
-          <button 
-            onClick={() => setConfirmClearAll(true)} 
-            className="text-[10px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors"
-          >
-            Tout effacer
-          </button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button 
+              onClick={() => setShowPortionsConfigModal(true)} 
+              className="text-[10px] sm:text-xs font-black uppercase tracking-wider px-3 py-2 sm:px-4 sm:py-2 rounded-xl bg-purple-100 text-purple-700 hover:bg-purple-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+            >
+              <span>⚙️</span>
+              <span>Paramétrer les portions</span>
+            </button>
+            <button 
+              onClick={() => setConfirmClearAll(true)} 
+              className="text-[10px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors"
+            >
+              Tout effacer
+            </button>
+          </div>
         </div>
       </div>
 
@@ -9047,17 +11089,9 @@ const ShoppingView: React.FC<{
           <div className="flex gap-2">
             <input type="number" className="w-20 p-3.5 border border-gray-100 rounded-2xl bg-gray-50 font-black text-center text-purple-600 outline-none" value={newItemAmount} onChange={e => setNewItemAmount(Number(e.target.value))} />
             <select className="w-24 p-3.5 border border-gray-100 rounded-2xl bg-gray-50 font-bold text-gray-500 outline-none cursor-pointer" value={newItemUnit} onChange={e => setNewItemUnit(e.target.value)}>
-              <option value="boite">boite</option>
-              <option value="C.à C">C.à C</option>
-              <option value="C.à S">C.à S</option>
-              <option value="cl">cl</option>
-              <option value="g">g</option>
-              <option value="kg">kg</option>
-              <option value="L">L</option>
-              <option value="ml">ml</option>
-              <option value="pièce">pc.</option>
-              <option value="tranche">tr.</option>
-              <option value="unité">u.</option>
+              {getAvailableUnits(settings).map(unit => (
+                <option key={unit} value={unit}>{unit}</option>
+              ))}
             </select>
             <button onClick={handleAddItem} className="bg-purple-600 text-white p-3.5 rounded-2xl font-black shadow-lg shadow-purple-100 active:scale-95 transition-all"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" /></svg></button>
           </div>
@@ -9070,25 +11104,36 @@ const ShoppingView: React.FC<{
           {(list || []).length === 0 ? (
             <div className="p-20 text-center text-gray-300 italic font-medium">Liste vide.</div>
           ) : (
-            sortedShoppingList.map(i => (
-              <div key={i.id} className={`p-5 flex gap-5 items-center transition-all ${i.checked ? 'bg-green-50/20' : ''}`}>
-                <div onClick={() => toggle(i.id)} className={`w-7 h-7 rounded-2xl border-2 flex items-center justify-center transition-all cursor-pointer ${i.checked ? 'bg-green-500 border-green-500' : 'border-gray-100 bg-white'}`}>
-                  {i.checked && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
+            sortedShoppingList.map(i => {
+              const converted = formatPortionConvertedDisplay(i.name, i.amount, i.unit, foodPortions);
+              return (
+                <div key={i.id} className={`p-5 flex gap-5 items-center transition-all ${i.checked ? 'bg-green-50/20' : ''}`}>
+                  <div onClick={() => toggle(i.id)} className={`w-7 h-7 rounded-2xl border-2 flex items-center justify-center transition-all cursor-pointer ${i.checked ? 'bg-green-500 border-green-500' : 'border-gray-100 bg-white'}`}>
+                    {i.checked && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-bold text-lg ${i.checked ? 'line-through text-gray-300' : 'text-gray-800'}`}>{i.name}</p>
+                    {converted.hasRule && (
+                      <p className="text-xs font-extrabold text-purple-600 mt-0.5 flex items-center gap-1">
+                        <span>🛒 Équivalence :</span>
+                        <span className="bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">{converted.formatted}</span>
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <input 
+                      type="number"
+                      className="w-20 p-1 text-center font-black text-xs bg-purple-50 text-purple-600 rounded-lg outline-none focus:ring-1 focus:ring-purple-300 transition-all border border-transparent hover:border-purple-200"
+                      value={i.amount}
+                      onChange={(e) => updateAmount(i.id, Number(e.target.value))}
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <span className={`text-[10px] font-black ${i.checked ? 'text-gray-300' : 'text-purple-400'}`}>{i.unit}</span>
+                  </div>
+                  <button onClick={() => remove(i.id)} className="text-gray-200 hover:text-red-400 transition-colors font-bold text-xl ml-2">×</button>
                 </div>
-                <p className={`flex-1 font-bold text-lg ${i.checked ? 'line-through text-gray-300' : 'text-gray-800'}`}>{i.name}</p>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <input 
-                    type="number"
-                    className="w-12 p-1 text-center font-black text-xs bg-purple-50 text-purple-600 rounded-lg outline-none focus:ring-1 focus:ring-purple-300 transition-all border border-transparent hover:border-purple-200"
-                    value={i.amount}
-                    onChange={(e) => updateAmount(i.id, Number(e.target.value))}
-                    onFocus={(e) => e.target.select()}
-                  />
-                  <span className={`text-[10px] font-black ${i.checked ? 'text-gray-300' : 'text-purple-400'}`}>{i.unit}</span>
-                </div>
-                <button onClick={() => remove(i.id)} className="text-gray-200 hover:text-red-400 transition-colors font-bold text-xl ml-2">×</button>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -9109,7 +11154,7 @@ const ShoppingView: React.FC<{
                     <div className="flex items-center gap-1.5 shrink-0">
                       <input 
                         type="number"
-                        className="w-12 p-1 text-center font-black text-xs bg-purple-50 text-purple-600 rounded-lg outline-none focus:ring-1 focus:ring-purple-300 transition-all border border-transparent hover:border-purple-200"
+                        className="w-20 p-1 text-center font-black text-xs bg-purple-50 text-purple-600 rounded-lg outline-none focus:ring-1 focus:ring-purple-300 transition-all border border-transparent hover:border-purple-200"
                         value={item.amount}
                         onChange={(e) => updateReserveAmount(item.id, Number(e.target.value))}
                         onFocus={(e) => e.target.select()}
@@ -9126,7 +11171,7 @@ const ShoppingView: React.FC<{
 
       {(list || []).length > 0 && !showSummary && (
         <div className="fixed bottom-24 left-0 right-0 p-6 md:relative md:bottom-0 md:p-0 flex justify-center z-40">
-          <button onClick={() => { setCheckedSummaryItems(new Set()); setShowSummary(true); }} className="w-full md:w-auto bg-green-600 text-white px-12 py-5 rounded-[24px] font-black shadow-2xl shadow-green-100 hover:scale-105 transition-all active:scale-95">
+          <button onClick={() => { setCheckedSummaryItems(new Set()); setShowSummary(true); }} className="w-full md:w-auto bg-green-600 text-white px-12 py-5 rounded-[24px] font-black shadow-2xl shadow-green-100 hover:scale-105 transition-all active:scale-95 cursor-pointer">
              🚀 Valider la Pré liste
           </button>
         </div>
@@ -9143,48 +11188,42 @@ const ShoppingView: React.FC<{
                    {checkedSummaryItems.size}/{consolidatedList.length} articles validés
                  </p>
                </div>
-               <button onClick={() => setShowSummary(false)} className="p-4 bg-gray-100 rounded-full hover:bg-gray-200 transition-all">×</button>
+               <button onClick={() => setShowSummary(false)} className="p-4 bg-gray-100 rounded-full hover:bg-gray-200 transition-all cursor-pointer">×</button>
              </header>
 
              <div className="space-y-8">
-                {(settings.foodCategories || FOOD_CATEGORIES).map(cat => {
+                {summaryCategories.map(cat => {
                   const items = groupedConsolidatedList[cat];
                   if (!items || items.length === 0) return null;
                   return (
                     <div key={cat} className="space-y-4">
                       <h3 className="text-sm font-black text-purple-600 uppercase tracking-widest border-b border-purple-100 pb-2 px-2">{cat}</h3>
                       <div className="bg-white rounded-[40px] border border-gray-100 divide-y divide-gray-50 overflow-hidden shadow-sm">
-                        {items.map(item => (
-                          <div key={item.id} className="p-6 flex items-center transition-all">
-                            <div onClick={() => toggleSummaryCheck(item.id)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer mr-5 shrink-0 ${checkedSummaryItems.has(item.id) ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
-                               {checkedSummaryItems.has(item.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
+                        {items.map(item => {
+                          const converted = formatPortionConvertedDisplay(item.name, item.amount, item.unit, foodPortions);
+                          return (
+                            <div key={item.id} className="p-6 flex items-center transition-all">
+                              <div onClick={() => toggleSummaryCheck(item.id)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer mr-5 shrink-0 ${checkedSummaryItems.has(item.id) ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
+                                {checkedSummaryItems.has(item.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
+                              </div>
+                              <div className="flex-1">
+                                <span className={`font-bold text-xl block ${checkedSummaryItems.has(item.id) ? 'line-through text-gray-300' : 'text-gray-800'}`}>{item.name}</span>
+                                {converted.hasRule && (
+                                  <span className="text-xs text-gray-400 font-medium block mt-0.5">
+                                    Cumul pré liste : {item.amount} {item.unit}
+                                  </span>
+                                )}
+                              </div>
+                              <span className={`font-black text-purple-600 bg-purple-50 px-4 py-2 rounded-2xl text-sm ${checkedSummaryItems.has(item.id) ? 'opacity-50' : ''}`}>
+                                {converted.formatted}
+                              </span>
                             </div>
-                            <span className={`flex-1 font-bold text-xl ${checkedSummaryItems.has(item.id) ? 'line-through text-gray-300' : 'text-gray-800'}`}>{item.name}</span>
-                            <span className={`font-black text-purple-600 bg-purple-50 px-4 py-1.5 rounded-2xl text-sm ${checkedSummaryItems.has(item.id) ? 'opacity-50' : ''}`}>{item.amount} {item.unit}</span>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   );
                 })}
-
-                {/* Autres catégories */}
-                {groupedConsolidatedList['Autres'] && groupedConsolidatedList['Autres'].length > 0 && (
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2 px-2">Autres</h3>
-                    <div className="bg-white rounded-[40px] border border-gray-100 divide-y divide-gray-50 overflow-hidden shadow-sm">
-                      {groupedConsolidatedList['Autres'].map(item => (
-                        <div key={item.id} className="p-6 flex items-center transition-all">
-                          <div onClick={() => toggleSummaryCheck(item.id)} className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer mr-5 shrink-0 ${checkedSummaryItems.has(item.id) ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
-                             {checkedSummaryItems.has(item.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
-                          </div>
-                          <span className={`flex-1 font-bold text-xl ${checkedSummaryItems.has(item.id) ? 'line-through text-gray-300' : 'text-gray-800'}`}>{item.name}</span>
-                          <span className={`font-black text-purple-600 bg-purple-50 px-4 py-1.5 rounded-2xl text-sm ${checkedSummaryItems.has(item.id) ? 'opacity-50' : ''}`}>{item.amount} {item.unit}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
              </div>
 
              <div className="pt-8 space-y-4">
@@ -9339,6 +11378,631 @@ const ShoppingView: React.FC<{
           </div>
         </div>
       )}
+
+      {/* MODAL PARAMÉTRER LES PORTIONS */}
+      {showPortionsConfigModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[160] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-[32px] sm:rounded-[40px] w-full max-w-xl overflow-hidden shadow-2xl border border-purple-100 flex flex-col max-h-[90vh] animate-scaleUp">
+            <div className="bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-600 p-6 sm:p-8 text-white relative">
+              <button 
+                onClick={() => setShowPortionsConfigModal(false)}
+                className="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors font-bold text-lg cursor-pointer"
+              >
+                ✕
+              </button>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">⚖️</span>
+                  <h3 className="text-xl sm:text-2xl font-black tracking-tight">
+                    Paramétrer les portions
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setShowPortionsExportImportModal(true)}
+                  className="mr-10 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-xl font-black text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  title="Exporter / Importer en fichier Excel"
+                >
+                  <span>📊</span>
+                  <span className="hidden sm:inline">Exporter / Importer</span>
+                </button>
+              </div>
+              <p className="text-purple-100 text-xs sm:text-sm font-medium leading-relaxed">
+                Définissez les équivalences de portions et d'unités d'achat pour vos aliments (ex: 7 portions = 1 pièce).
+              </p>
+            </div>
+
+            <div className="p-6 sm:p-8 overflow-y-auto space-y-4 flex-1">
+              <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
+                <span className="text-xs font-black uppercase text-purple-600 tracking-wider">
+                  Équivalences configurées
+                </span>
+                <div className="flex items-center gap-2">
+                  {configuredPortions.length > 0 && (
+                    <button
+                      onClick={() => setShowClearAllPortionsModal(true)}
+                      className="px-3.5 py-2 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-xl font-black text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      title="Supprimer toute la liste des portions"
+                    >
+                      <span>🗑️</span>
+                      <span>Supprimer tout</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowPortionsExportImportModal(true)}
+                    className="px-3.5 py-2 bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 rounded-xl font-black text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    title="Exporter / Importer la liste d'aliments et valeurs en Excel"
+                  >
+                    <span>📊</span>
+                    <span>Exporter / Importer</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPortionFoodName('');
+                      setPortionCategory('Épicerie');
+                      setPortionRules([{ id: Math.random().toString(36).substr(2, 9), baseAmount: 7, baseUnit: 'portion(s)', purchaseAmount: 1, purchaseUnit: 'pièce(s)' }]);
+                      setShowAddPortionFoodModal(true);
+                    }}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-xl font-black text-xs hover:bg-purple-700 shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>➕</span>
+                    <span>Ajouter aliment</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Champ de recherche pour sélectionner un aliment */}
+              {configuredPortions.length > 0 && (
+                <div className="relative mb-4">
+                  <div className="relative flex items-center">
+                    <span className="absolute left-3.5 text-gray-400 text-sm">🔍</span>
+                    <input
+                      type="text"
+                      value={portionSearchQuery}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPortionSearchQuery(val);
+                        if (val.trim()) {
+                          const matched = configuredPortions.find(p => 
+                            p.name.toLowerCase().includes(val.trim().toLowerCase())
+                          );
+                          if (matched) {
+                            const el = document.getElementById(`portion-row-${matched.id}`);
+                            if (el) {
+                              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                          }
+                        }
+                      }}
+                      placeholder="Rechercher et accéder directement à un aliment..."
+                      className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-purple-200/80 focus:border-purple-500 focus:bg-white rounded-2xl text-xs font-bold text-gray-800 placeholder-gray-400 outline-none transition-all shadow-inner"
+                    />
+                    {portionSearchQuery && (
+                      <button
+                        onClick={() => setPortionSearchQuery('')}
+                        className="absolute right-3 text-gray-400 hover:text-gray-600 text-xs font-bold p-1 cursor-pointer"
+                        title="Effacer la recherche"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  {/* Suggestions déroulantes si recherche active */}
+                  {portionSearchQuery.trim() && (
+                    <div className="mt-1 bg-white border border-purple-100 rounded-2xl shadow-lg overflow-hidden max-h-40 overflow-y-auto z-10 space-y-0.5 p-1">
+                      {configuredPortions
+                        .filter(p => p.name.toLowerCase().includes(portionSearchQuery.trim().toLowerCase()))
+                        .map(p => {
+                          const rules = getPortionRules(p);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                setPortionSearchQuery(p.name);
+                                const el = document.getElementById(`portion-row-${p.id}`);
+                                if (el) {
+                                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                              }}
+                              className="w-full text-left px-3 py-1.5 hover:bg-purple-50 rounded-xl text-xs font-bold text-gray-700 flex items-center justify-between cursor-pointer transition-colors"
+                            >
+                              <span>{p.name}</span>
+                              <span className="text-[10px] text-purple-600 font-bold">
+                                {rules.map(r => `${r.baseAmount} ${r.baseUnit} = ${r.purchaseAmount} ${r.purchaseUnit}`).join(' | ')}
+                              </span>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {configuredPortions.length === 0 ? (
+                <div className="p-8 text-center text-gray-400 italic font-medium bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                  Aucune équivalence de portion configurée. Cliquez sur "Ajouter aliment" pour en créer une.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {configuredPortions.map(p => {
+                    const rules = getPortionRules(p);
+                    const isHighlighted = portionSearchQuery.trim() && p.name.toLowerCase().includes(portionSearchQuery.trim().toLowerCase());
+                    return (
+                      <div 
+                        key={p.id} 
+                        id={`portion-row-${p.id}`}
+                        className={`border rounded-2xl p-4 flex items-center justify-between transition-all duration-300 ${
+                          isHighlighted 
+                            ? 'bg-purple-50/90 border-purple-400 shadow-md ring-2 ring-purple-300 ring-offset-1 scale-[1.01]' 
+                            : 'bg-gray-50 border-gray-200/80'
+                        }`}
+                      >
+                        <div>
+                          <h4 className="font-extrabold text-sm text-gray-900">{p.name}</h4>
+                          <div className="space-y-0.5 mt-1">
+                            {rules.map((r, rIdx) => (
+                              <div key={r.id || rIdx} className="text-xs font-bold text-purple-600 flex items-center gap-1.5 flex-wrap">
+                                {rules.length > 1 && (
+                                  <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded font-extrabold">
+                                    #{rIdx + 1}
+                                  </span>
+                                )}
+                                <span>{r.baseAmount} {r.baseUnit} = {r.purchaseAmount} {r.purchaseUnit}</span>
+                                {r.minThreshold && r.minThreshold > 0 ? (
+                                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-md">
+                                    (dès {r.minThreshold} {r.baseUnit})
+                                  </span>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setPortionFoodName(p.name);
+                              setPortionCategory(p.category || 'Épicerie');
+                              const existingRules = getPortionRules(p);
+                              setPortionRules(existingRules.map(r => ({ ...r, id: r.id || Math.random().toString(36).substr(2, 9), minThreshold: r.minThreshold })));
+                              setShowAddPortionFoodModal(true);
+                            }}
+                            className="p-2 text-gray-500 hover:text-purple-600 font-bold text-xs cursor-pointer"
+                            title="Modifier"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => setPortionToDelete(p)}
+                            className="p-2 text-gray-400 hover:text-red-500 font-bold text-xs cursor-pointer"
+                            title="Supprimer la règle"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => setShowPortionsConfigModal(false)}
+                className="px-6 py-2.5 rounded-xl font-black text-xs text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMATION SUPPRESSION TOUTES LES PORTIONS */}
+      {showClearAllPortionsModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl border border-red-100 flex flex-col animate-scaleUp p-6 space-y-4">
+            <div className="flex items-center gap-3 text-red-600">
+              <span className="text-2xl">⚠️</span>
+              <h3 className="text-lg font-black text-gray-900">Supprimer toute la liste ?</h3>
+            </div>
+            <p className="text-sm font-medium text-gray-600 leading-relaxed">
+              Êtes-vous sûr de vouloir supprimer <strong className="text-red-600 font-black">l'intégralité des {configuredPortions.length} portions et équivalences</strong> configurées ? Cette action est irréversible.
+            </p>
+            <div className="flex justify-end gap-3 pt-3">
+              <button
+                onClick={() => setShowClearAllPortionsModal(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleClearAllPortions}
+                className="px-5 py-2.5 rounded-xl text-xs font-black text-white bg-red-600 hover:bg-red-700 shadow-md transition-all cursor-pointer"
+              >
+                Tout supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMATION SUPPRESSION PORTION */}
+      {portionToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl border border-red-100 flex flex-col animate-scaleUp p-6 space-y-4">
+            <div className="flex items-center gap-3 text-red-600">
+              <span className="text-2xl">⚠️</span>
+              <h3 className="text-lg font-black text-gray-900">Confirmer la suppression</h3>
+            </div>
+            <p className="text-sm font-medium text-gray-600 leading-relaxed">
+              Voulez-vous vraiment supprimer cet aliment des portions : <strong className="text-gray-900">{portionToDelete.name}</strong> ?
+            </p>
+            <div className="flex justify-end gap-3 pt-3">
+              <button
+                onClick={() => setPortionToDelete(null)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  handleDeletePortionRule(portionToDelete.id);
+                  setPortionToDelete(null);
+                }}
+                className="px-5 py-2.5 rounded-xl text-xs font-black text-white bg-red-600 hover:bg-red-700 shadow-md transition-all cursor-pointer"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AJOUTER / MODIFIER ALIMENT (PORTIONS & ÉQUIVALENCES MULTIPLES) */}
+      {showAddPortionFoodModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[180] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-[32px] sm:rounded-[40px] w-full max-w-lg overflow-hidden shadow-2xl border border-purple-100 flex flex-col animate-scaleUp max-h-[90vh]">
+            <div className="bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-600 p-6 sm:p-7 text-white relative">
+              <button 
+                onClick={() => setShowAddPortionFoodModal(false)}
+                className="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors font-bold text-lg cursor-pointer"
+              >
+                ✕
+              </button>
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-2xl">🍎</span>
+                <h3 className="text-lg sm:text-xl font-black tracking-tight">
+                  Aliment & Équivalences
+                </h3>
+              </div>
+              <p className="text-purple-100 text-xs font-medium">
+                Associez une ou plusieurs équivalences pour cet aliment (ex: par pièce, par g, par portion, etc.).
+              </p>
+            </div>
+
+            <div className="p-6 sm:p-7 space-y-5 overflow-y-auto max-h-[70vh]">
+              {/* Selection de l'aliment */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase text-gray-700 tracking-wider">
+                  Sélectionner ou saisir un aliment
+                </label>
+                <input
+                  type="text"
+                  list="available-foods-portions-list"
+                  placeholder="Ex: Cuisse de dinde, Salade verte, Pommes de terre..."
+                  value={portionFoodName}
+                  onChange={(e) => handleSelectFoodForPortion(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 font-bold text-sm text-gray-900 outline-none focus:ring-2 focus:ring-purple-300"
+                />
+                <datalist id="available-foods-portions-list">
+                  {allAvailableFoods.map(food => (
+                    <option key={food} value={food} />
+                  ))}
+                </datalist>
+              </div>
+
+              {/* Catégorie */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase text-gray-700 tracking-wider">
+                  Rayon / Catégorie
+                </label>
+                <select
+                  value={portionCategory}
+                  onChange={(e) => setPortionCategory(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-xs text-gray-800 outline-none focus:ring-2 focus:ring-purple-300 cursor-pointer"
+                >
+                  {(foodCategories || ['Épicerie']).map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Section des équivalences multiples */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-black uppercase text-purple-800 tracking-wider">
+                      Équivalences ({portionRules.length})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddRuleRow}
+                    className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-xl font-extrabold text-xs flex items-center gap-1.5 transition-colors cursor-pointer active:scale-95 shadow-xs"
+                    title="Ajouter une équivalence supplémentaire"
+                  >
+                    <span>➕</span>
+                    <span>Ajouter une équivalence</span>
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {portionRules.map((rule, idx) => (
+                    <div key={rule.id || idx} className="bg-purple-50/40 p-4 rounded-2xl border border-purple-200/80 space-y-3 relative shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-black text-purple-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded-full bg-purple-200 text-purple-800 inline-flex items-center justify-center text-[10px] font-black">
+                            {idx + 1}
+                          </span>
+                          <span>Équivalence #{idx + 1}</span>
+                        </span>
+                        {portionRules.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRuleRow(rule.id || '')}
+                            className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                            title="Supprimer cette équivalence"
+                          >
+                            <span>🗑️</span>
+                            <span className="text-[10px]">Supprimer</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Quantité de base */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase text-purple-800 tracking-wider block">
+                          Quantité et unité de base (recette / portion)
+                        </label>
+                        <div className="grid grid-cols-12 gap-2.5 items-center">
+                          <div className="col-span-4">
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="any"
+                              value={rule.baseAmount}
+                              onChange={(e) => handleUpdateRuleRow(rule.id || '', 'baseAmount', Number(e.target.value))}
+                              className="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 font-black text-center text-xs text-purple-700 outline-none focus:ring-2 focus:ring-purple-300 shadow-xs"
+                            />
+                          </div>
+                          <div className="col-span-8">
+                            <select
+                              value={rule.baseUnit}
+                              onChange={(e) => handleUpdateRuleRow(rule.id || '', 'baseUnit', e.target.value)}
+                              className="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 font-bold text-xs text-gray-800 outline-none focus:ring-2 focus:ring-purple-300 cursor-pointer shadow-xs"
+                            >
+                              {getAvailablePortionUnits(settings).map(unit => (
+                                <option key={unit} value={unit}>{unit}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quantité d'achat */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase text-indigo-800 tracking-wider block">
+                          = Équivalence en unité d'achat (magasin)
+                        </label>
+                        <div className="grid grid-cols-12 gap-2.5 items-center">
+                          <div className="col-span-4">
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="any"
+                              value={rule.purchaseAmount}
+                              onChange={(e) => handleUpdateRuleRow(rule.id || '', 'purchaseAmount', Number(e.target.value))}
+                              className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 font-black text-center text-xs text-indigo-700 outline-none focus:ring-2 focus:ring-indigo-300 shadow-xs"
+                            />
+                          </div>
+                          <div className="col-span-8">
+                            <select
+                              value={rule.purchaseUnit}
+                              onChange={(e) => handleUpdateRuleRow(rule.id || '', 'purchaseUnit', e.target.value)}
+                              className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 font-bold text-xs text-gray-800 outline-none focus:ring-2 focus:ring-indigo-300 cursor-pointer shadow-xs"
+                            >
+                              {getAvailablePortionUnits(settings).map(unit => (
+                                <option key={unit} value={unit}>{unit}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Seuil de déclenchement minimum (Palier) */}
+                      <div className="space-y-1 bg-white/70 p-2.5 rounded-xl border border-purple-100">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black uppercase text-purple-900 tracking-wider block">
+                            Palier / Seuil minimum de déclenchement
+                          </label>
+                          <span className="text-[9px] text-gray-400 font-semibold">(optionnel)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-gray-600">Si quantité totale ≥</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            placeholder="Ex: 19"
+                            value={rule.minThreshold ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? undefined : Number(e.target.value);
+                              handleUpdateRuleRow(rule.id || '', 'minThreshold', val);
+                            }}
+                            className="w-24 bg-white border border-purple-200 rounded-lg px-2 py-1.5 font-black text-center text-xs text-purple-700 outline-none focus:ring-2 focus:ring-purple-300 shadow-xs"
+                          />
+                          <span className="text-xs font-black text-purple-700">{rule.baseUnit}</span>
+                          <span className="text-[10px] text-gray-400 font-medium ml-auto">
+                            {rule.minThreshold ? `(actif dès ${rule.minThreshold})` : '(auto)'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preview of rules */}
+              {portionFoodName.trim() && (
+                <div className="bg-gray-100 p-3.5 rounded-2xl space-y-1.5">
+                  <span className="text-xs font-black text-gray-700 block">
+                    Règles configurées pour {portionFoodName.trim()} :
+                  </span>
+                  <div className="space-y-1">
+                    {portionRules.map((rule, idx) => (
+                      <p key={rule.id || idx} className="text-xs font-bold text-purple-700 flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] bg-purple-200 text-purple-900 px-1.5 py-0.2 rounded font-extrabold">
+                          #{idx + 1}
+                        </span>
+                        <span>{rule.baseAmount} {rule.baseUnit} = {rule.purchaseAmount} {rule.purchaseUnit}</span>
+                        {rule.minThreshold && rule.minThreshold > 0 ? (
+                          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                            (dès {rule.minThreshold} {rule.baseUnit})
+                          </span>
+                        ) : null}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowAddPortionFoodModal(false)}
+                className="px-4 py-2.5 rounded-xl font-bold text-xs text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSavePortionRule}
+                disabled={!portionFoodName.trim()}
+                className="px-5 py-2.5 rounded-xl font-black text-xs text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 shadow-md transition-all cursor-pointer"
+              >
+                Enregistrer l'aliment et ses équivalences
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EXPORTER / IMPORTER PORTIONS EN EXCEL */}
+      {showPortionsExportImportModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[190] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-[32px] sm:rounded-[40px] w-full max-w-lg overflow-hidden shadow-2xl border border-purple-100 flex flex-col animate-scaleUp">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-600 p-6 sm:p-7 text-white relative">
+              <button 
+                onClick={() => {
+                  setShowPortionsExportImportModal(false);
+                  setPortionsImportStatus(null);
+                }}
+                className="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors font-bold text-lg cursor-pointer"
+              >
+                ✕
+              </button>
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-2xl">📊</span>
+                <h3 className="text-lg sm:text-xl font-black tracking-tight">
+                  Exporter / Importer les portions (Excel)
+                </h3>
+              </div>
+              <p className="text-purple-100 text-xs font-medium">
+                Gérez la liste de vos aliments et leurs valeurs de conversion via un fichier Excel (.xlsx).
+              </p>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 sm:p-7 space-y-5 overflow-y-auto max-h-[75vh]">
+              {portionsImportStatus && (
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs font-black flex items-center gap-2 animate-fadeIn">
+                  <span className="text-lg">✅</span>
+                  <span>{portionsImportStatus}</span>
+                </div>
+              )}
+
+              {/* Action 1: Export */}
+              <div className="bg-purple-50/60 p-5 rounded-3xl border border-purple-100 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 text-purple-700 rounded-2xl flex items-center justify-center text-xl shrink-0">
+                    📥
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-gray-900">Exporter en fichier Excel</h4>
+                    <p className="text-[11px] text-gray-500 font-medium">
+                      Téléchargez un tableur contenant {configuredPortions.length} aliment(s) configuré(s) avec leurs portions et unités d'achat.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={exportPortionsToExcel}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-2xl font-black text-xs shadow-md shadow-purple-200 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                >
+                  <span>📊</span>
+                  <span>Télécharger le fichier Excel (.xlsx)</span>
+                </button>
+              </div>
+
+              {/* Action 2: Import */}
+              <div className="bg-indigo-50/60 p-5 rounded-3xl border border-indigo-100 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-100 text-indigo-700 rounded-2xl flex items-center justify-center text-xl shrink-0">
+                    📤
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-gray-900">Importer un fichier Excel</h4>
+                    <p className="text-[11px] text-gray-500 font-medium">
+                      Importez ou mettez à jour les aliments avec leurs valeurs de portions depuis un fichier .xlsx ou .xls.
+                    </p>
+                  </div>
+                </div>
+                <label className="w-full bg-white hover:bg-indigo-50 text-indigo-700 border-2 border-dashed border-indigo-200 py-3 px-4 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 text-center">
+                  <span>📁</span>
+                  <span>Sélectionner un fichier Excel à importer</span>
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls"
+                    className="hidden"
+                    onChange={importPortionsFromExcel}
+                  />
+                </label>
+              </div>
+
+              {/* Information / Colonnes supportées */}
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-[11px] text-gray-500 space-y-1">
+                <p className="font-bold text-gray-700">Colonnes reconnues dans le fichier Excel :</p>
+                <p className="font-mono text-[10px] text-purple-700">
+                  Aliment | Catégorie | Quantité base | Unité base | Quantité achat | Unité achat
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-5 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowPortionsExportImportModal(false);
+                  setPortionsImportStatus(null);
+                }}
+                className="px-6 py-2.5 rounded-xl font-black text-xs text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -9467,14 +12131,111 @@ const Settings: React.FC<{
   }, [addFoodName, settings.foodPortions]);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [addCategoryName, setAddCategoryName] = useState('');
+  const [showUnitsConfigModal, setShowUnitsConfigModal] = useState(false);
+  const [activeUnitTab, setActiveUnitTab] = useState<'recipes' | 'portions'>('recipes');
+  const [showAddUnitModal, setShowAddUnitModal] = useState(false);
+  const [newUnitInput, setNewUnitInput] = useState('');
+  const [showEditUnitModal, setShowEditUnitModal] = useState(false);
+  const [unitToEdit, setUnitToEdit] = useState<string | null>(null);
+  const [editUnitInput, setEditUnitInput] = useState('');
+  const [unitToDelete, setUnitToDelete] = useState<string | null>(null);
+
+  const handleAddNewUnit = () => {
+    const trimmed = newUnitInput.trim();
+    if (!trimmed) return;
+    const currentList = activeUnitTab === 'recipes' 
+      ? getAvailableRecipeUnits(settings) 
+      : getAvailablePortionUnits(settings);
+    if (currentList.some(u => u.toLowerCase() === trimmed.toLowerCase())) {
+      alert("Cette unité existe déjà dans cette liste !");
+      return;
+    }
+    if (activeUnitTab === 'recipes') {
+      setSettings(prev => ({
+        ...prev,
+        customWeightUnits: [...(prev.customWeightUnits || []), trimmed]
+      }));
+    } else {
+      const currentList = getAvailablePortionUnits(settings);
+      setSettings(prev => ({
+        ...prev,
+        portionUnitsList: [...currentList, trimmed],
+        customPortionUnits: [...(prev.customPortionUnits || []), trimmed]
+      }));
+    }
+    setNewUnitInput('');
+    setShowAddUnitModal(false);
+  };
+
+  const handleStartEditUnit = (unit: string) => {
+    setUnitToEdit(unit);
+    setEditUnitInput(unit);
+    setShowEditUnitModal(true);
+  };
+
+  const handleSaveEditUnit = () => {
+    if (!unitToEdit) return;
+    const trimmed = editUnitInput.trim();
+    if (!trimmed) return;
+    if (trimmed.toLowerCase() === unitToEdit.toLowerCase()) {
+      setShowEditUnitModal(false);
+      setUnitToEdit(null);
+      setEditUnitInput('');
+      return;
+    }
+    const currentList = activeUnitTab === 'recipes' 
+      ? getAvailableRecipeUnits(settings) 
+      : getAvailablePortionUnits(settings);
+    if (currentList.some(u => u.toLowerCase() === trimmed.toLowerCase() && u.toLowerCase() !== unitToEdit.toLowerCase())) {
+      alert("Cette unité existe déjà dans cette liste !");
+      return;
+    }
+    if (activeUnitTab === 'recipes') {
+      setSettings(prev => ({
+        ...prev,
+        customWeightUnits: (prev.customWeightUnits || []).map(u => u === unitToEdit ? trimmed : u)
+      }));
+    } else {
+      const currentList = getAvailablePortionUnits(settings);
+      const updatedList = currentList.map(u => u === unitToEdit ? trimmed : u);
+      setSettings(prev => ({
+        ...prev,
+        portionUnitsList: updatedList,
+        customPortionUnits: (prev.customPortionUnits || []).map(u => u === unitToEdit ? trimmed : u)
+      }));
+    }
+    setShowEditUnitModal(false);
+    setUnitToEdit(null);
+    setEditUnitInput('');
+  };
+
+  const handleDeleteCustomUnit = (unitToRemove: string) => {
+    if (activeUnitTab === 'recipes') {
+      setSettings(prev => ({
+        ...prev,
+        customWeightUnits: (prev.customWeightUnits || []).filter(u => u !== unitToRemove)
+      }));
+    } else {
+      const currentList = getAvailablePortionUnits(settings);
+      setSettings(prev => ({
+        ...prev,
+        portionUnitsList: currentList.filter(u => u !== unitToRemove),
+        customPortionUnits: (prev.customPortionUnits || []).filter(u => u !== unitToRemove)
+      }));
+    }
+    setUnitToDelete(null);
+  };
   const [secoursBaseDate, setSecoursBaseDate] = useState(() => {
-    const d = new Date();
-    const day = d.getDay();
-    const diff = d.getDate() - (day === 6 ? 0 : day + 1);
-    const saturday = new Date(d.setDate(diff));
-    saturday.setHours(0, 0, 0, 0);
-    return saturday;
+    const start = getStartOfWeek(new Date(), settings.startDay ?? 6);
+    if (settings.defaultWeek === 'next') {
+      start.setDate(start.getDate() + 7);
+    }
+    return start;
   });
+
+  useEffect(() => {
+    setSecoursBaseDate(prev => getStartOfWeek(prev, settings.startDay ?? 6));
+  }, [settings.startDay]);
 
   const formatWeekRange = (date: Date) => {
     const start = new Date(date);
@@ -9553,7 +12314,11 @@ const Settings: React.FC<{
         name: addFoodName.trim(),
         amount: 1,
         unit: 'g',
-        category: addFoodCategory === 'none' ? undefined : addFoodCategory
+        category: addFoodCategory === 'none' ? undefined : addFoodCategory,
+        baseAmount: 1,
+        baseUnit: 'portion(s)',
+        purchaseAmount: 1,
+        purchaseUnit: 'pièce(s)'
       }].sort((a,b) => a.name.localeCompare(b.name))
     }));
     setAddFoodName('');
@@ -9634,7 +12399,11 @@ const Settings: React.FC<{
         name, 
         amount: 1, 
         unit: 'g',
-        category 
+        category,
+        baseAmount: 1,
+        baseUnit: 'portion(s)',
+        purchaseAmount: 1,
+        purchaseUnit: 'pièce(s)'
       }]
     }));
     
@@ -9926,6 +12695,121 @@ const Settings: React.FC<{
                     Pour les jours décochés, la valeur par défaut de la question 1 ({settings.dietServingsDefault ?? 2.5} pers.) sera appliquée.
                   </p>
                 </div>
+
+                {/* GESTION DES ARRONDIS DES UNITÉS INDIVISIBLES */}
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">⚙️</span>
+                    <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider">
+                      Gestion des arrondis (unités indivisibles) :
+                    </h4>
+                  </div>
+
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.dietRoundDiscreteUnits ?? true}
+                      onChange={(e) => setSettings(prev => ({ ...prev, dietRoundDiscreteUnits: e.target.checked }))}
+                      className="w-5 h-5 mt-0.5 rounded text-purple-600 focus:ring-purple-500 cursor-pointer accent-purple-600 shrink-0"
+                    />
+                    <div>
+                      <span className="text-xs font-black text-gray-800 block">
+                        Arrondir les unités indivisibles (pots, pièces, œufs, tranches, etc.) à l'entier
+                      </span>
+                      <span className="text-[11px] text-gray-500 font-medium block mt-0.5">
+                        Évite les décimales non fractionnables (ex: 1,2 pot devient 1 pot ou 2 pots selon le mode choisi).
+                      </span>
+                    </div>
+                  </label>
+
+                  {(settings.dietRoundDiscreteUnits ?? true) && (
+                    <div className="pl-8 pt-1 space-y-3">
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-black text-gray-600 uppercase tracking-wider">
+                          Unités à prendre en compte :
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-200">
+                          {getRoundingUnitsList(settings).map(unit => {
+                            const selectedUnits = settings.dietRoundingUnits && settings.dietRoundingUnits.length > 0
+                              ? settings.dietRoundingUnits
+                              : DEFAULT_DIET_ROUNDING_UNITS;
+                            const isChecked = selectedUnits.includes(unit);
+
+                            return (
+                              <label key={unit} className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white transition-colors cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    const updated = e.target.checked
+                                      ? [...selectedUnits, unit]
+                                      : selectedUnits.filter(u => u !== unit);
+                                    setSettings(prev => ({ ...prev, dietRoundingUnits: updated }));
+                                  }}
+                                  className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer accent-purple-600 shrink-0"
+                                />
+                                <span className="text-xs font-bold text-gray-800 truncate" title={unit}>
+                                  {unit}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] font-black text-gray-600 uppercase tracking-wider">
+                        Méthode d'arrondi :
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label
+                          className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                            (settings.dietRoundingMode || 'nearest') === 'nearest'
+                              ? 'bg-purple-50 border-purple-300 text-purple-900 ring-1 ring-purple-200'
+                              : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="settingsDietRoundingMode"
+                            value="nearest"
+                            checked={(settings.dietRoundingMode || 'nearest') === 'nearest'}
+                            onChange={() => setSettings(prev => ({ ...prev, dietRoundingMode: 'nearest' }))}
+                            className="w-4 h-4 mt-0.5 text-purple-600 focus:ring-purple-500 accent-purple-600 shrink-0"
+                          />
+                          <div>
+                            <span className="text-xs font-black block">Arrondi standard au plus proche</span>
+                            <span className="text-[10px] text-gray-500 font-medium block mt-0.5">
+                              Ex: 1,2 → 1 pot ; 1,6 → 2 pots
+                            </span>
+                          </div>
+                        </label>
+
+                        <label
+                          className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                            settings.dietRoundingMode === 'ceil'
+                              ? 'bg-purple-50 border-purple-300 text-purple-900 ring-1 ring-purple-200'
+                              : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="settingsDietRoundingMode"
+                            value="ceil"
+                            checked={settings.dietRoundingMode === 'ceil'}
+                            onChange={() => setSettings(prev => ({ ...prev, dietRoundingMode: 'ceil' }))}
+                            className="w-4 h-4 mt-0.5 text-purple-600 focus:ring-purple-500 accent-purple-600 shrink-0"
+                          />
+                          <div>
+                            <span className="text-xs font-black block">Arrondi supérieur</span>
+                            <span className="text-[10px] text-gray-500 font-medium block mt-0.5">
+                              Ex: 1,2 → 2 pots
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -9970,6 +12854,14 @@ const Settings: React.FC<{
                 >
                   <span>📁</span>
                   Ajouter une catégorie
+                </button>
+
+                <button 
+                  onClick={() => setShowUnitsConfigModal(true)}
+                  className="w-full bg-white text-purple-600 p-4 rounded-2xl font-black border-2 border-purple-100 hover:bg-purple-50 transition-all shadow-sm flex items-center justify-center gap-3 cursor-pointer"
+                >
+                  <span>⚖️</span>
+                  Unités de poids et mesures
                 </button>
 
                 {showEditFoodForm && (
@@ -10075,7 +12967,11 @@ const Settings: React.FC<{
                             name: newFoodName.trim(), 
                             amount: 1, 
                             unit: 'g',
-                            category: newFoodCategory === 'none' ? undefined : newFoodCategory
+                            category: newFoodCategory === 'none' ? undefined : newFoodCategory,
+                            baseAmount: 1,
+                            baseUnit: 'portion(s)',
+                            purchaseAmount: 1,
+                            purchaseUnit: 'pièce(s)'
                           }] });
                           setNewFoodName('');
                           setNewFoodCategory('none');
@@ -10309,7 +13205,14 @@ const Settings: React.FC<{
             <div className="p-8 bg-gray-50/50 border-t border-gray-100 space-y-6 animate-slideDown">
               {!showSecoursForm ? (
                 <button 
-                  onClick={() => setShowSecoursForm(true)} 
+                  onClick={() => {
+                    const start = getStartOfWeek(new Date(), settings.startDay ?? 6);
+                    if (settings.defaultWeek === 'next') {
+                      start.setDate(start.getDate() + 7);
+                    }
+                    setSecoursBaseDate(start);
+                    setShowSecoursForm(true);
+                  }} 
                   className="w-full bg-white text-red-600 p-6 rounded-3xl font-black border-2 border-red-100 hover:bg-red-50 transition-all shadow-sm"
                 >
                   Réinitialiser une semaine
@@ -10655,6 +13558,269 @@ const Settings: React.FC<{
                 className="flex-1 bg-green-600 text-white p-6 rounded-3xl font-black shadow-lg shadow-green-200 hover:bg-green-700 transition-all transform active:scale-95"
               >
                 Créer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIGURER LES UNITÉS DE POIDS ET MESURES */}
+      {showUnitsConfigModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[150] flex items-center justify-center p-6 animate-fadeIn">
+          <div className={`bg-white rounded-[40px] w-full ${activeUnitTab === 'portions' ? 'max-w-2xl' : 'max-w-xl'} overflow-hidden shadow-2xl animate-scaleUp max-h-[90vh] flex flex-col transition-all duration-200`}>
+            <div className="p-8 pb-4 text-center border-b border-gray-100 shrink-0">
+              <div className="w-16 h-16 bg-purple-100 rounded-3xl flex items-center justify-center mx-auto mb-4 text-3xl">⚖️</div>
+              <h3 className="text-2xl font-black text-gray-900 mb-1 tracking-tight">Unités de poids et mesures</h3>
+              <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                Gérez les unités de mesure pour vos recettes et pour le paramétrage des portions.
+              </p>
+            </div>
+
+            {/* Onglets sélecteurs de liste d'unités */}
+            <div className="px-6 pt-4 pb-2 shrink-0">
+              <div className="flex bg-gray-100 p-1.5 rounded-2xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveUnitTab('recipes')}
+                  className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    activeUnitTab === 'recipes'
+                      ? 'bg-white text-purple-700 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <span>🍳</span>
+                  <span>Recettes & Ingrédients</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    activeUnitTab === 'recipes' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {getAvailableRecipeUnits(settings).length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveUnitTab('portions')}
+                  className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    activeUnitTab === 'portions'
+                      ? 'bg-white text-purple-700 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <span>🛒</span>
+                  <span>Portions & Équivalences</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    activeUnitTab === 'portions' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {getAvailablePortionUnits(settings).length}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+              <div className="p-3 bg-purple-50/60 border border-purple-100 rounded-2xl text-xs text-purple-800 font-medium">
+                {activeUnitTab === 'recipes' ? (
+                  <span>
+                    🍳 <strong>Unités Recettes & Aliments :</strong> Utilisées pour tous les ajouts et modifications d'ingrédients dans les recettes, aliments, menus et réserve.
+                  </span>
+                ) : (
+                  <span>
+                    🛒 <strong>Unités Portions (Courses) :</strong> Utilisées spécifiquement dans le modal <em>« Paramétrer les portions »</em> des courses (unités de base et unités d'achat).
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-gray-400 tracking-wider">
+                  Unités configurées ({activeUnitTab === 'recipes' ? getAvailableRecipeUnits(settings).length : getAvailablePortionUnits(settings).length})
+                </span>
+                <button 
+                  onClick={() => {
+                    setNewUnitInput('');
+                    setShowAddUnitModal(true);
+                  }}
+                  className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-xs shadow-md transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                >
+                  <span>➕</span>
+                  <span>Ajouter une unité</span>
+                </button>
+              </div>
+
+              <div className={activeUnitTab === 'portions' ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "grid grid-cols-2 sm:grid-cols-3 gap-2.5"}>
+                {(activeUnitTab === 'recipes' ? getAvailableRecipeUnits(settings) : getAvailablePortionUnits(settings)).map((unit) => {
+                  const customList = activeUnitTab === 'recipes' ? (settings.customWeightUnits || []) : (settings.customPortionUnits || []);
+                  const isCustom = customList.includes(unit);
+                  return (
+                    <div 
+                      key={unit} 
+                      className={`p-3.5 rounded-2xl border flex items-center justify-between gap-2 transition-all ${isCustom ? 'bg-purple-50/80 border-purple-200 text-purple-900 font-bold' : 'bg-gray-50 border-gray-200 text-gray-700 font-semibold'} text-xs`}
+                    >
+                      <span className={activeUnitTab === 'portions' ? "font-bold pr-1 flex-1 break-words leading-snug" : "truncate pr-1 font-bold flex-1"}>{unit}</span>
+                      {isCustom ? (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button 
+                            onClick={() => handleStartEditUnit(unit)}
+                            className="text-gray-400 hover:text-purple-600 transition-colors p-1 cursor-pointer"
+                            title="Modifier cette unité"
+                          >
+                            <EXT_ICONS.Edit />
+                          </button>
+                          <button 
+                            onClick={() => setUnitToDelete(unit)}
+                            className="text-gray-400 hover:text-red-500 transition-colors p-1 cursor-pointer"
+                            title="Supprimer cette unité personnalisée"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      ) : activeUnitTab === 'portions' ? (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider shrink-0 bg-gray-200/60 px-1.5 py-0.5 rounded">Standard</span>
+                          <button 
+                            onClick={() => handleStartEditUnit(unit)}
+                            className="text-gray-400 hover:text-purple-600 transition-colors p-1 cursor-pointer"
+                            title="Modifier cette unité standard"
+                          >
+                            <EXT_ICONS.Edit />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider shrink-0 bg-gray-200/60 px-1.5 py-0.5 rounded">Standard</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-6 bg-gray-50 flex justify-end border-t border-gray-100 shrink-0">
+              <button 
+                onClick={() => setShowUnitsConfigModal(false)}
+                className="px-8 py-3.5 bg-gray-200 hover:bg-gray-300 rounded-2xl font-black text-xs text-gray-700 transition-colors cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL MODIFIER UNE UNITÉ */}
+      {showEditUnitModal && unitToEdit && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[165] flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white rounded-[40px] w-full max-w-md overflow-hidden shadow-2xl animate-scaleUp">
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-purple-100 rounded-3xl flex items-center justify-center mx-auto mb-6 text-3xl">✏️</div>
+              <h3 className="text-2xl font-black text-gray-900 mb-2 tracking-tight">Modifier l'unité</h3>
+              <p className="text-xs text-gray-500 font-medium mb-6 leading-relaxed">
+                Modifiez le nom de l'unité <strong className="text-purple-700 font-bold">"{unitToEdit}"</strong> ({activeUnitTab === 'recipes' ? 'Recettes & Aliments' : 'Portions & Équivalences'}).
+              </p>
+              
+              <div className="space-y-3 text-left">
+                <label className="text-xs font-black text-purple-600 uppercase tracking-widest ml-1">Nouveau nom de l'unité</label>
+                <input 
+                  type="text"
+                  value={editUnitInput}
+                  onChange={(e) => setEditUnitInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSaveEditUnit()}
+                  placeholder={activeUnitTab === 'recipes' ? "Ex: tasse, pincée, sachet, feuille..." : "Ex: plaquette(s) de 24, carton, cageot..."}
+                  className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-800 focus:border-purple-500 transition-all outline-none"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="p-6 bg-gray-50 flex gap-3 border-t border-gray-100">
+              <button 
+                onClick={() => {
+                  setShowEditUnitModal(false);
+                  setUnitToEdit(null);
+                  setEditUnitInput('');
+                }}
+                className="flex-1 p-4 font-black text-xs uppercase tracking-wider text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={handleSaveEditUnit}
+                disabled={!editUnitInput.trim()}
+                className="flex-1 bg-purple-600 text-white p-4 rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-purple-200 hover:bg-purple-700 transition-all transform active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AJOUTER UNE UNITÉ */}
+      {showAddUnitModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[160] flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white rounded-[40px] w-full max-w-md overflow-hidden shadow-2xl animate-scaleUp">
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-purple-100 rounded-3xl flex items-center justify-center mx-auto mb-6 text-3xl">⚖️</div>
+              <h3 className="text-2xl font-black text-gray-900 mb-2 tracking-tight">
+                {activeUnitTab === 'recipes' ? "Ajouter une unité (Recettes)" : "Ajouter une unité (Portions / Courses)"}
+              </h3>
+              <p className="text-xs text-gray-500 font-medium mb-6 leading-relaxed">
+                {activeUnitTab === 'recipes' 
+                  ? "Renseignez la nouvelle unité utilisable dans les recettes, aliments et menus."
+                  : "Renseignez la nouvelle unité utilisable pour paramétrer les portions et achats de courses."}
+              </p>
+              
+              <div className="space-y-3 text-left">
+                <label className="text-xs font-black text-purple-600 uppercase tracking-widest ml-1">Nom de l'unité</label>
+                <input 
+                  type="text"
+                  value={newUnitInput}
+                  onChange={(e) => setNewUnitInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddNewUnit()}
+                  placeholder={activeUnitTab === 'recipes' ? "Ex: tasse, pincée, sachet, feuille..." : "Ex: plaquette(s) de 24, carton, cageot..."}
+                  className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-800 focus:border-purple-500 transition-all outline-none"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="p-6 bg-gray-50 flex gap-3 border-t border-gray-100">
+              <button 
+                onClick={() => {
+                  setShowAddUnitModal(false);
+                  setNewUnitInput('');
+                }}
+                className="flex-1 p-4 font-black text-xs uppercase tracking-wider text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={handleAddNewUnit}
+                className="flex-1 bg-purple-600 text-white p-4 rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-purple-200 hover:bg-purple-700 transition-all transform active:scale-95 cursor-pointer"
+              >
+                Valider
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMATION SUPPRESSION UNITÉ */}
+      {unitToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[170] flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white rounded-[32px] w-full max-w-sm overflow-hidden shadow-2xl p-6 text-center space-y-4 animate-scaleUp">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto text-xl">⚠️</div>
+            <h3 className="text-lg font-black text-gray-900">Supprimer cette unité ?</h3>
+            <p className="text-xs text-gray-500 font-medium">
+              Voulez-vous vraiment retirer l'unité <strong className="text-gray-800">"{unitToDelete}"</strong> de la liste {activeUnitTab === 'recipes' ? 'Recettes' : 'Portions'} ?
+            </p>
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => setUnitToDelete(null)}
+                className="flex-1 p-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-xs hover:bg-gray-200 transition-all cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={() => handleDeleteCustomUnit(unitToDelete)}
+                className="flex-1 p-3 bg-red-600 text-white rounded-xl font-bold text-xs hover:bg-red-700 transition-all shadow-md cursor-pointer"
+              >
+                Supprimer
               </button>
             </div>
           </div>
