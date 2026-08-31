@@ -22,8 +22,8 @@ export interface MealPlanDay {
   dinner?: { recipe1?: string; recipe2?: string };
   viennoiseries?: (string | undefined)[];
   sauces?: (string | undefined)[];
-  dietLunch?: { protein?: string; vegetable?: string; starch?: string; dessert?: string; dietRecipe?: string; servings?: number };
-  dietDinner?: { protein?: string; vegetable?: string; starch?: string; dessert?: string; dietRecipe?: string; servings?: number };
+  dietLunch?: { protein?: string; vegetable?: string; starch?: string; dairy?: string; dessert?: string; dietRecipe?: string; servings?: number };
+  dietDinner?: { protein?: string; vegetable?: string; starch?: string; dairy?: string; dessert?: string; dietRecipe?: string; servings?: number };
 }
 
 export interface ShoppingListItem {
@@ -86,7 +86,7 @@ export interface FoodPortion {
   rules?: PortionRule[];
 }
 
-export type DietCategory = 'Protéines' | 'Légumes' | 'Féculents' | 'Desserts';
+export type DietCategory = 'Protéines' | 'Légumes' | 'Féculents' | 'Laitage' | 'Desserts';
 
 export interface DietItem {
   id: string;
