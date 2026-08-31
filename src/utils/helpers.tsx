@@ -64,7 +64,8 @@ export const MASTER_RECIPE_UNITS = [
   'pincée(s)',
   'portion(s)',
   'pot(s)',
-  'tranche(s)'
+  'tranche(s)',
+  'unité'
 ];
 
 export const MASTER_PORTION_UNITS = [
@@ -89,10 +90,58 @@ export const MASTER_PORTION_UNITS = [
   'portion(s)',
   'pot(s)',
   'sachet(s)',
-  'tranche(s)'
+  'tranche(s)',
+  'unité'
 ];
 
 export const MASTER_UNITS = MASTER_RECIPE_UNITS;
+
+export const normalizeUnitKey = (u: string): string => {
+  if (!u) return '';
+  let clean = u.trim().toLowerCase()
+    .replace(/[éèêë]/g, 'e')
+    .replace(/[àâä]/g, 'a')
+    .replace(/[ùûü]/g, 'u')
+    .replace(/[ïî]/g, 'i')
+    .replace(/[ôö]/g, 'o')
+    .replace(/œ/g, 'oe')
+    .replace(/\./g, '')
+    .replace(/\(s\)|\(es\)|\(x\)|\(e\)/g, '')
+    .trim();
+  
+  if (['piece', 'pieces', 'unite', 'unites', 'u'].includes(clean)) return 'piece';
+  if (['portion', 'portions', 'part', 'parts'].includes(clean)) return 'portion';
+  if (['pot', 'pots'].includes(clean)) return 'pot';
+  if (['tranche', 'tranches'].includes(clean)) return 'tranche';
+  if (['sachet', 'sachets'].includes(clean)) return 'sachet';
+  if (['boite', 'boites'].includes(clean)) return 'boite';
+  if (['bocal', 'bocaux'].includes(clean)) return 'bocal';
+  if (['bouteille', 'bouteilles'].includes(clean)) return 'bouteille';
+  if (['brique', 'briques'].includes(clean)) return 'brique';
+  if (['pack', 'packs'].includes(clean)) return 'pack';
+  if (['paquet', 'paquets'].includes(clean)) return 'paquet';
+  if (['plaquette', 'plaquettes'].includes(clean)) return 'plaquette';
+  if (['plateau', 'plateaux'].includes(clean)) return 'plateau';
+  if (['filet', 'filets'].includes(clean)) return 'filet';
+  if (['oeuf', 'oeufs'].includes(clean)) return 'oeufs';
+  if (['cas', 'cuillere a soupe', 'cuilleres a soupe', 'casoupe'].includes(clean)) return 'cas';
+  if (['cac', 'cuillere a cafe', 'cuilleres a cafe', 'cafe'].includes(clean)) return 'cac';
+  if (['pincee', 'pincees'].includes(clean)) return 'pincee';
+  if (['g', 'gr', 'gramme', 'grammes'].includes(clean)) return 'g';
+  if (['kg', 'kilo', 'kilos', 'kilogramme', 'kilogrammes'].includes(clean)) return 'kg';
+  if (['mg', 'milligramme', 'milligrammes'].includes(clean)) return 'mg';
+  if (['ml', 'millilitre', 'millilitres'].includes(clean)) return 'ml';
+  if (['cl', 'centilitre', 'centilitres'].includes(clean)) return 'cl';
+  if (['dl', 'decilitre', 'decilitres'].includes(clean)) return 'dl';
+  if (['l', 'litre', 'litres'].includes(clean)) return 'l';
+  return clean;
+};
+
+export const areUnitsEquivalent = (u1: string = '', u2: string = ''): boolean => {
+  if (!u1 && !u2) return true;
+  if (!u1 || !u2) return false;
+  return normalizeUnitKey(u1) === normalizeUnitKey(u2);
+};
 
 export const getAvailableRecipeUnits = (settings?: UserSettings): string[] => {
   const custom = settings?.customWeightUnits || [];
@@ -140,7 +189,7 @@ export const getAvailableUnits = (settings?: UserSettings): string[] => {
   return getAvailableRecipeUnits(settings);
 };
 
-export const DEFAULT_DIET_ROUNDING_UNITS: string[] = ['pot(s)', 'pièce(s)'];
+export const DEFAULT_DIET_ROUNDING_UNITS: string[] = ['pot(s)', 'pièce(s)', 'unité'];
 
 export const getRoundingUnitsList = (settings?: UserSettings): string[] => {
   const portionUnits = getAvailablePortionUnits(settings);
@@ -148,6 +197,7 @@ export const getRoundingUnitsList = (settings?: UserSettings): string[] => {
   const combined = Array.from(new Set([
     'pot(s)',
     'pièce(s)',
+    'unité',
     'œufs',
     'tranche(s)',
     'portion(s)',
@@ -185,6 +235,7 @@ export const parseWeightAndUnit = (rawWeight: string = '', customUnits: string[]
     let rawUnit = match[2]?.trim() || 'g';
     const allUnits = Array.from(new Set([...MASTER_UNITS, ...customUnits]));
     const foundUnit = allUnits.find(u => 
+      areUnitsEquivalent(u, rawUnit) ||
       u.toLowerCase() === rawUnit.toLowerCase() || 
       u.toLowerCase().startsWith(rawUnit.toLowerCase()) ||
       (rawUnit.toLowerCase().startsWith('pi') && u.includes('pièce')) ||
@@ -196,7 +247,7 @@ export const parseWeightAndUnit = (rawWeight: string = '', customUnits: string[]
   return { value: '100', unit: 'g' };
 };
 
-export const UNIT_CONVERSIONS: Record<string, { dimension: 'mass' | 'volume'; factorToBase: number }> = {
+export const UNIT_CONVERSIONS: Record<string, { dimension: 'mass' | 'volume' | 'count'; factorToBase: number }> = {
   // Masse (base = g)
   'g': { dimension: 'mass', factorToBase: 1 },
   'gr': { dimension: 'mass', factorToBase: 1 },
@@ -226,22 +277,60 @@ export const UNIT_CONVERSIONS: Record<string, { dimension: 'mass' | 'volume'; fa
   'l': { dimension: 'volume', factorToBase: 1000 },
   'litre': { dimension: 'volume', factorToBase: 1000 },
   'litres': { dimension: 'volume', factorToBase: 1000 },
+
+  // Unités de comptage (base = 1)
+  'piece': { dimension: 'count', factorToBase: 1 },
+  'pièce': { dimension: 'count', factorToBase: 1 },
+  'pièces': { dimension: 'count', factorToBase: 1 },
+  'pièce(s)': { dimension: 'count', factorToBase: 1 },
+  'unite': { dimension: 'count', factorToBase: 1 },
+  'unité': { dimension: 'count', factorToBase: 1 },
+  'unités': { dimension: 'count', factorToBase: 1 },
+  'u': { dimension: 'count', factorToBase: 1 },
+  'portion': { dimension: 'count', factorToBase: 1 },
+  'portions': { dimension: 'count', factorToBase: 1 },
+  'portion(s)': { dimension: 'count', factorToBase: 1 },
+  'pot': { dimension: 'count', factorToBase: 1 },
+  'pots': { dimension: 'count', factorToBase: 1 },
+  'pot(s)': { dimension: 'count', factorToBase: 1 },
+  'tranche': { dimension: 'count', factorToBase: 1 },
+  'tranches': { dimension: 'count', factorToBase: 1 },
+  'tranche(s)': { dimension: 'count', factorToBase: 1 },
+  'oeufs': { dimension: 'count', factorToBase: 1 },
+  'œufs': { dimension: 'count', factorToBase: 1 },
+  'oeuf': { dimension: 'count', factorToBase: 1 },
+  'œuf': { dimension: 'count', factorToBase: 1 },
+  'sachet': { dimension: 'count', factorToBase: 1 },
+  'sachets': { dimension: 'count', factorToBase: 1 },
+  'sachet(s)': { dimension: 'count', factorToBase: 1 },
+  'boite': { dimension: 'count', factorToBase: 1 },
+  'boites': { dimension: 'count', factorToBase: 1 },
+  'boite(s)': { dimension: 'count', factorToBase: 1 },
+  'boîte': { dimension: 'count', factorToBase: 1 },
+  'boîtes': { dimension: 'count', factorToBase: 1 },
+  'boîte(s)': { dimension: 'count', factorToBase: 1 },
 };
 
-export const getUnitDimension = (unit: string): { dimension: 'mass' | 'volume'; factorToBase: number } | null => {
+export const getUnitDimension = (unit: string): { dimension: 'mass' | 'volume' | 'count'; factorToBase: number } | null => {
   if (!unit) return null;
   const clean = unit.trim().toLowerCase().replace(/\./g, '');
-  return UNIT_CONVERSIONS[clean] || null;
+  const key = normalizeUnitKey(unit);
+  return UNIT_CONVERSIONS[key] || UNIT_CONVERSIONS[clean] || null;
 };
 
 export const convertUnitAmount = (amount: number, fromUnit: string, toUnit: string): number | null => {
   if (isNaN(amount)) return null;
-  const normFrom = fromUnit.trim().toLowerCase().replace(/\./g, '');
-  const normTo = toUnit.trim().toLowerCase().replace(/\./g, '');
-  if (normFrom === normTo) return amount;
+  if (areUnitsEquivalent(fromUnit, toUnit)) return amount;
 
-  const fromInfo = UNIT_CONVERSIONS[normFrom];
-  const toInfo = UNIT_CONVERSIONS[normTo];
+  const keyFrom = normalizeUnitKey(fromUnit);
+  const keyTo = normalizeUnitKey(toUnit);
+  if (keyFrom && keyTo && keyFrom === keyTo) return amount;
+
+  const cleanFrom = fromUnit.trim().toLowerCase().replace(/\./g, '');
+  const cleanTo = toUnit.trim().toLowerCase().replace(/\./g, '');
+
+  const fromInfo = UNIT_CONVERSIONS[keyFrom] || UNIT_CONVERSIONS[cleanFrom];
+  const toInfo = UNIT_CONVERSIONS[keyTo] || UNIT_CONVERSIONS[cleanTo];
 
   if (fromInfo && toInfo && fromInfo.dimension === toInfo.dimension) {
     const baseValue = amount * fromInfo.factorToBase;
@@ -807,9 +896,9 @@ export function formatPortionConvertedDisplay(
   const normName = itemName.trim().toLowerCase();
   let fp = (foodPortions || []).find(p => p.name.trim().toLowerCase() === normName);
   if (!fp) {
-    const normClean = normName.replace(/œ/g, 'oe').replace(/é|è|ê/g, 'e');
+    const normClean = normName.replace(/œ/g, 'oe').replace(/[éèêë]/g, 'e');
     fp = (foodPortions || []).find(p => {
-      const pClean = p.name.trim().toLowerCase().replace(/œ/g, 'oe').replace(/é|è|ê/g, 'e');
+      const pClean = p.name.trim().toLowerCase().replace(/œ/g, 'oe').replace(/[éèêë]/g, 'e');
       return pClean === normClean || pClean.includes(normClean) || normClean.includes(pClean);
     });
   }
@@ -835,9 +924,36 @@ export function formatPortionConvertedDisplay(
     };
   }
 
-  const cleanItemUnit = itemUnit.trim().toLowerCase().replace(/\./g, '');
-  
-  // Recherche et conversion de toutes les règles candidates compatibles avec l'unité de l'article
+  const formatUnitText = (amt: number, u: string) => {
+    let clean = u.trim();
+    if (amt <= 1) {
+      clean = clean.replace(/\(s\)/gi, '')
+                   .replace(/\(x\)/gi, '')
+                   .replace(/\(es\)/gi, '')
+                   .replace(/\(e\)/gi, '');
+    } else {
+      clean = clean.replace(/\(s\)/gi, 's')
+                   .replace(/\(x\)/gi, 'x')
+                   .replace(/\(es\)/gi, 'es')
+                   .replace(/\(e\)/gi, 'e');
+    }
+    return `${amt} ${clean.trim()}`;
+  };
+
+  // 1. Si l'unité de l'article est déjà l'unité d'achat de la règle (ex: 2 pièces ou 2 unités alors que l'achat est en pièce(s)/unité)
+  const purchaseMatchRule = rules.find(r => areUnitsEquivalent(itemUnit, r.purchaseUnit));
+  if (purchaseMatchRule) {
+    const targetPUnit = purchaseMatchRule.purchaseUnit || itemUnit;
+    return {
+      formatted: formatUnitText(itemAmount, targetPUnit),
+      hasRule: true,
+      purchaseAmount: itemAmount,
+      purchaseUnit: targetPUnit,
+      originalText: `${itemAmount} ${itemUnit}`
+    };
+  }
+
+  // 2. Recherche et conversion de toutes les règles candidates compatibles avec l'unité de l'article
   interface CandidateTierRule {
     rule: PortionRule;
     effectiveAmountInBaseUnit: number;
@@ -847,10 +963,9 @@ export function formatPortionConvertedDisplay(
   const candidates: CandidateTierRule[] = [];
   rules.forEach(r => {
     const rBaseUnit = (r.baseUnit || 'portion(s)').trim();
-    const cleanRBaseUnit = rBaseUnit.toLowerCase().replace(/\./g, '');
     let amtInBase: number | null = null;
 
-    if (cleanItemUnit === cleanRBaseUnit) {
+    if (areUnitsEquivalent(itemUnit, rBaseUnit)) {
       amtInBase = itemAmount;
     } else {
       amtInBase = convertUnitAmount(itemAmount, itemUnit, rBaseUnit);
@@ -869,16 +984,14 @@ export function formatPortionConvertedDisplay(
   });
 
   if (candidates.length === 0) {
-    // Si aucune conversion d'unité possible, repli sur la première règle
-    const fallbackRule = rules[0];
-    const threshold = (typeof fallbackRule.minThreshold === 'number' && !isNaN(fallbackRule.minThreshold) && fallbackRule.minThreshold > 0)
-      ? fallbackRule.minThreshold
-      : (fallbackRule.baseAmount || 1);
-    candidates.push({
-      rule: fallbackRule,
-      effectiveAmountInBaseUnit: itemAmount,
-      threshold
-    });
+    // Si aucune conversion d'unité possible (ex: unités incompatibles comme pièce et gramme sans règle correspondante)
+    return {
+      formatted: `${itemAmount} ${itemUnit}`,
+      hasRule: false,
+      purchaseAmount: itemAmount,
+      purchaseUnit: itemUnit,
+      originalText: `${itemAmount} ${itemUnit}`
+    };
   }
 
   // Filtrer les paliers qualifiés (où la quantité totale atteint ou dépasse le seuil)
@@ -925,30 +1038,14 @@ export function formatPortionConvertedDisplay(
     remainderDisplayUnit = itemUnit;
   }
 
-  const formatUnit = (amt: number, u: string) => {
-    let clean = u.trim();
-    if (amt <= 1) {
-      clean = clean.replace(/\(s\)/gi, '')
-                   .replace(/\(x\)/gi, '')
-                   .replace(/\(es\)/gi, '')
-                   .replace(/\(e\)/gi, '');
-    } else {
-      clean = clean.replace(/\(s\)/gi, 's')
-                   .replace(/\(x\)/gi, 'x')
-                   .replace(/\(es\)/gi, 'es')
-                   .replace(/\(e\)/gi, 'e');
-    }
-    return `${amt} ${clean.trim()}`;
-  };
-
   let formatted = '';
 
   if (fullPurchaseCount === 0 || remainderBaseAmountInBaseRuleUnit <= 0.0001) {
-    formatted = formatUnit(totalPurchaseCount, purchaseRuleUnit);
+    formatted = formatUnitText(totalPurchaseCount, purchaseRuleUnit);
   } else {
-    const totalText = formatUnit(totalPurchaseCount, purchaseRuleUnit);
-    const fullText = formatUnit(fullPurchaseCount, purchaseRuleUnit);
-    const remainderText = formatUnit(remainderDisplayAmount, remainderDisplayUnit);
+    const totalText = formatUnitText(totalPurchaseCount, purchaseRuleUnit);
+    const fullText = formatUnitText(fullPurchaseCount, purchaseRuleUnit);
+    const remainderText = formatUnitText(remainderDisplayAmount, remainderDisplayUnit);
     formatted = `${totalText} (${fullText} et ${remainderText})`;
   }
 
