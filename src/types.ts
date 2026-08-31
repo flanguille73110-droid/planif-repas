@@ -109,3 +109,9 @@ export interface DietRecipe {
   servings: number;
   items?: DietRecipeItem[];
 }
+
+export interface PantryGroup {
+  id: string;
+  name: string;
+  items: { name: string; amount?: number; unit?: string }[];
+}
