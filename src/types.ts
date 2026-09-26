@@ -62,6 +62,9 @@ export interface UserSettings {
   dietRoundDiscreteUnits?: boolean;
   dietRoundingMode?: 'nearest' | 'ceil';
   dietRoundingUnits?: string[];
+  storageType?: 'localstorage' | 'supabase';
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
 }
 
 export interface PortionRule {

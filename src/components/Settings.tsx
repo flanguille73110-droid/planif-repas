@@ -14,6 +14,8 @@ import {
   formatScaledWeight, normalizeDietFoodName, getDietFoodStem, levenshteinDist,
   findSimilarDietFoods, resolveDietFoodCategory, detectSettingsCategoryFromFoodName, getPortionRules, formatPortionConvertedDisplay
 } from '../utils/helpers';
+import { CULINASHARE_TABLE_NAME, CULINASHARE_SQL_SCHEMA, testSupabaseConnection, saveAppDataToSupabase, loadAppDataFromSupabase, SupabaseStatus, StorageMode } from '../utils/supabaseClient';
+
 
 export const Settings: React.FC<{ 
   settings: UserSettings; 
@@ -37,6 +39,14 @@ export const Settings: React.FC<{
   pantryGroups?: PantryGroup[];
   reserveItems?: ShoppingListItem[];
   baseDate?: Date;
+  storageMode?: StorageMode;
+  setStorageMode?: (mode: StorageMode) => void;
+  supabaseStatus?: SupabaseStatus;
+  setSupabaseStatus?: React.Dispatch<React.SetStateAction<SupabaseStatus>>;
+  onSyncAllDataToSupabase?: () => Promise<{ success: boolean; message: string }>;
+  onLoadAllDataFromSupabase?: () => Promise<{ success: boolean; message: string }>;
+  activeSectionProp?: string | null;
+  setActiveSectionProp?: (sec: string | null) => void;
 }> = ({ 
   settings, 
   setSettings, 
@@ -58,9 +68,49 @@ export const Settings: React.FC<{
   dietRecipes = [],
   pantryGroups = [],
   reserveItems = [],
-  baseDate
+  baseDate,
+  storageMode = 'localstorage',
+  setStorageMode,
+  supabaseStatus = 'local',
+  setSupabaseStatus,
+  onSyncAllDataToSupabase,
+  onLoadAllDataFromSupabase,
+  activeSectionProp,
+  setActiveSectionProp
 }) => {
-  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<string | null>(activeSectionProp || null);
+
+  useEffect(() => {
+    if (activeSectionProp !== undefined && activeSectionProp !== null) {
+      setActiveSection(activeSectionProp);
+    }
+  }, [activeSectionProp]);
+
+  const toggleSection = (sec: string) => {
+    setActiveSection(prev => {
+      const next = prev === sec ? null : sec;
+      if (setActiveSectionProp) setActiveSectionProp(next);
+      return next;
+    });
+  };
+
+  // États pour la section Stockage
+  const currentStorageMode: StorageMode = settings.storageType || 'localstorage';
+  const [supabaseUrlInput, setSupabaseUrlInput] = useState<string>(settings.supabaseUrl || '');
+  const [supabaseKeyInput, setSupabaseKeyInput] = useState<string>(settings.supabaseAnonKey || '');
+  const [showPasswordKey, setShowPasswordKey] = useState<boolean>(false);
+  const [storageTestStatus, setStorageTestStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [isTestingStorage, setIsTestingStorage] = useState<boolean>(false);
+  const [isSyncingStorage, setIsSyncingStorage] = useState<boolean>(false);
+  const [isPullingStorage, setIsPullingStorage] = useState<boolean>(false);
+  const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
+  const [copiedSql, setCopiedSql] = useState<boolean>(false);
+
+  useEffect(() => {
+    setSupabaseUrlInput(settings.supabaseUrl || '');
+    setSupabaseKeyInput(settings.supabaseAnonKey || '');
+  }, [settings.supabaseUrl, settings.supabaseAnonKey]);
+
   const [newFoodName, setNewFoodName] = useState('');
   const [newFoodCategory, setNewFoodCategory] = useState<string>('none');
   const [newCategoryFoodNames, setNewCategoryFoodNames] = useState<Record<string, string>>({});
@@ -431,8 +481,6 @@ export const Settings: React.FC<{
   };
 
   const currentCategories = settings.foodCategories || FOOD_CATEGORIES;
-
-  const toggleSection = (id: string) => setActiveSection(activeSection === id ? null : id);
 
   const startEditFood = (food: FoodPortion) => {
     setEditingFoodId(food.id);
@@ -1338,6 +1386,324 @@ export const Settings: React.FC<{
           )}
         </div>
 
+        {/* SECTION STOCKAGE (LocalStorage / Supabase) */}
+        <div className="bg-white rounded-[32px] overflow-hidden border border-gray-100 shadow-sm transition-all">
+          <button onClick={() => toggleSection('storage')} className="w-full p-8 flex items-center justify-between hover:bg-purple-50/30 transition-all text-left">
+            <div className="flex items-center gap-6">
+              <div className="w-14 h-14 bg-indigo-100 rounded-2xl flex items-center justify-center text-2xl">🗄️</div>
+              <div>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-xl font-black text-gray-800">Stockage</h3>
+                  {currentStorageMode === 'supabase' ? (
+                    supabaseStatus === 'connected' ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        🟢 Supabase
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                        🔴 Déconnecté
+                      </span>
+                    )
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-gray-100 text-gray-700 border border-gray-200">
+                      💾 LocalStorage
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">LocalStorage / Supabase</p>
+              </div>
+            </div>
+            <svg className={`w-6 h-6 text-gray-300 transition-transform ${activeSection === 'storage' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+          </button>
+          
+          {activeSection === 'storage' && (
+            <div className="p-8 bg-gray-50/50 border-t border-gray-100 space-y-8 animate-slideDown">
+              {/* Bouton sélecteur 2 positions : LocalStorage / Supabase */}
+              <div className="space-y-3">
+                <label className="text-sm font-black text-gray-800 block">
+                  Mode de stockage des données :
+                </label>
+                <div className="grid grid-cols-2 p-1.5 bg-white border border-gray-200 rounded-2xl shadow-2xs max-w-md">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettings(prev => ({ ...prev, storageType: 'localstorage' }));
+                      if (setStorageMode) setStorageMode('localstorage');
+                      if (setSupabaseStatus) setSupabaseStatus('local');
+                      setStorageTestStatus({ type: 'info', message: "Mode LocalStorage activé. Les données restent sur ce navigateur." });
+                    }}
+                    className={`py-3 px-4 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      currentStorageMode === 'localstorage'
+                        ? 'bg-gray-800 text-white shadow-md'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span>💾</span>
+                    <span>LocalStorage</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettings(prev => ({ ...prev, storageType: 'supabase' }));
+                      if (setStorageMode) setStorageMode('supabase');
+                      setStorageTestStatus(null);
+                    }}
+                    className={`py-3 px-4 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      currentStorageMode === 'supabase'
+                        ? 'bg-purple-600 text-white shadow-md'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span>☁️</span>
+                    <span>Supabase</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Contenu selon le mode sélectionné */}
+              {currentStorageMode === 'localstorage' ? (
+                <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-2xs space-y-3 animate-fadeIn">
+                  <div className="flex items-center gap-3 text-gray-800">
+                    <span className="text-2xl">💾</span>
+                    <div>
+                      <h4 className="font-black text-sm">Mode Local (LocalStorage) actif</h4>
+                      <p className="text-xs text-gray-500 font-medium mt-0.5">
+                        Toutes vos données (recettes, planning, courses, stocks) sont stockées localement dans votre navigateur.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-2 text-xs text-gray-600 font-semibold bg-gray-50 p-3.5 rounded-2xl border border-gray-100">
+                    💡 Pour synchroniser vos données entre plusieurs appareils ou sauvegarder en ligne, activez l'option <strong>Supabase</strong> ci-dessus.
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6 animate-fadeIn">
+                  {/* Encadré d'information sur la déclaration des tables */}
+                  <div className="bg-purple-50 p-5 rounded-3xl border border-purple-200 space-y-2">
+                    <div className="flex items-center gap-2.5 text-purple-950 font-black text-sm">
+                      <span className="text-lg">🛡️</span>
+                      <span>Table dédiée : <code className="bg-purple-200/80 px-2 py-0.5 rounded-lg font-mono text-purple-900 text-xs">culinashare_data</code></span>
+                    </div>
+                    <p className="text-xs text-purple-900 font-medium leading-relaxed">
+                      La table de stockage est automatiquement déclarée avec le nom de l'application (<strong>culinashare_data</strong>). Vous pouvez utiliser la même URL et clé Supabase que vos autres projets en toute sécurité, sans aucun risque d'écrasement ni de conflit !
+                    </p>
+                  </div>
+
+                  {/* Formulaire URL et Clé Publique */}
+                  <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-2xs space-y-5">
+                    <h4 className="font-black text-sm text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                      <span>🔑</span>
+                      <span>Identifiants de connexion Supabase</span>
+                    </h4>
+
+                    {/* Champ 1 : URL Supabase */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-gray-700 block uppercase tracking-wider">
+                        1. URL du projet Supabase
+                      </label>
+                      <input 
+                        type="text"
+                        value={supabaseUrlInput}
+                        onChange={(e) => setSupabaseUrlInput(e.target.value)}
+                        placeholder="https://xxxxxxxxxxxxxxxxxxxx.supabase.co"
+                        className="w-full p-4 border border-gray-200 rounded-2xl bg-gray-50 font-bold text-sm text-gray-800 outline-none focus:border-purple-500 focus:bg-white transition-all font-mono"
+                      />
+                      <p className="text-[11px] text-gray-400 font-medium">
+                        Trouvez cette URL dans votre tableau de bord Supabase : <em>Settings → API → Project URL</em>.
+                      </p>
+                    </div>
+
+                    {/* Champ 2 : Clé Publique (Anon Key) */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-black text-gray-700 uppercase tracking-wider">
+                          2. Clé Publique (Anon Key)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswordKey(!showPasswordKey)}
+                          className="text-[11px] font-bold text-purple-600 hover:text-purple-700 cursor-pointer"
+                        >
+                          {showPasswordKey ? 'Masquer' : 'Afficher'}
+                        </button>
+                      </div>
+                      <input 
+                        type={showPasswordKey ? 'text' : 'password'}
+                        value={supabaseKeyInput}
+                        onChange={(e) => setSupabaseKeyInput(e.target.value)}
+                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        className="w-full p-4 border border-gray-200 rounded-2xl bg-gray-50 font-bold text-sm text-gray-800 outline-none focus:border-purple-500 focus:bg-white transition-all font-mono"
+                      />
+                      <p className="text-[11px] text-gray-400 font-medium">
+                        Utilisez la clé publique <strong>anon public</strong> de votre projet (<em>Settings → API → Project API Keys</em>).
+                      </p>
+                    </div>
+
+                    {/* Message d'état du test */}
+                    {storageTestStatus && (
+                      <div className={`p-4 rounded-2xl border text-xs font-bold space-y-1 animate-fadeIn ${
+                        storageTestStatus.type === 'success' 
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                          : storageTestStatus.type === 'error'
+                          ? 'bg-rose-50 border-rose-200 text-rose-900'
+                          : 'bg-blue-50 border-blue-200 text-blue-900'
+                      }`}>
+                        <div className="flex items-center gap-2 font-black">
+                          <span>{storageTestStatus.type === 'success' ? '✅' : storageTestStatus.type === 'error' ? '❌' : 'ℹ️'}</span>
+                          <span>{storageTestStatus.message}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Boutons d'action de configuration */}
+                    <div className="flex flex-wrap gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const cleanUrl = supabaseUrlInput.trim();
+                          const cleanKey = supabaseKeyInput.trim();
+                          if (!cleanUrl || !cleanKey) {
+                            setStorageTestStatus({ type: 'error', message: "Veuillez renseigner l'URL et la clé publique Supabase." });
+                            return;
+                          }
+
+                          setIsTestingStorage(true);
+                          setStorageTestStatus(null);
+                          try {
+                            const res = await testSupabaseConnection(cleanUrl, cleanKey);
+                            if (res.success) {
+                              setSettings(prev => ({
+                                ...prev,
+                                storageType: 'supabase',
+                                supabaseUrl: cleanUrl,
+                                supabaseAnonKey: cleanKey
+                              }));
+                              if (setSupabaseStatus) setSupabaseStatus('connected');
+                              setStorageTestStatus({
+                                type: 'success',
+                                message: res.message
+                              });
+                            } else {
+                              if (setSupabaseStatus) setSupabaseStatus('disconnected');
+                              setStorageTestStatus({
+                                type: 'error',
+                                message: res.message
+                              });
+                            }
+                          } catch (err: any) {
+                            if (setSupabaseStatus) setSupabaseStatus('disconnected');
+                            setStorageTestStatus({ type: 'error', message: err?.message || 'Erreur lors du test de connexion' });
+                          } finally {
+                            setIsTestingStorage(false);
+                          }
+                        }}
+                        disabled={isTestingStorage}
+                        className="flex-1 min-w-[200px] bg-purple-600 text-white p-4 rounded-2xl font-black shadow-md hover:bg-purple-700 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {isTestingStorage ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>Test en cours...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>💾</span>
+                            <span>Enregistrer & Tester la connexion</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowSqlModal(true)}
+                        className="bg-gray-100 text-gray-700 p-4 rounded-2xl font-black hover:bg-gray-200 transition-all flex items-center justify-center gap-2 cursor-pointer text-xs"
+                        title="Afficher le script SQL pour créer la table dans Supabase"
+                      >
+                        <span>📋</span>
+                        <span>Script SQL</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Actions de synchronisation manuelle */}
+                  <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-2xs space-y-4">
+                    <h4 className="font-black text-sm text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                      <span>🔄</span>
+                      <span>Synchronisation des données</span>
+                    </h4>
+                    <p className="text-xs text-gray-500 font-medium">
+                      En mode Supabase, les modifications sont automatiquement enregistrées. Vous pouvez aussi forcer une synchronisation immédiate :
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (onSyncAllDataToSupabase) {
+                            setIsSyncingStorage(true);
+                            try {
+                              const res = await onSyncAllDataToSupabase();
+                              alert(res.message);
+                            } finally {
+                              setIsSyncingStorage(false);
+                            }
+                          }
+                        }}
+                        disabled={isSyncingStorage || supabaseStatus !== 'connected'}
+                        className="bg-emerald-600 text-white p-4 rounded-2xl font-black shadow-md hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 text-xs sm:text-sm"
+                      >
+                        {isSyncingStorage ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>Envoi en cours...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>📤</span>
+                            <span>Envoyer mes données vers Supabase</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (onLoadAllDataFromSupabase) {
+                            if (!window.confirm("Voulez-vous charger les données depuis Supabase ? Cela remplacera les données locales.")) {
+                              return;
+                            }
+                            setIsPullingStorage(true);
+                            try {
+                              const res = await onLoadAllDataFromSupabase();
+                              alert(res.message);
+                            } finally {
+                              setIsPullingStorage(false);
+                            }
+                          }
+                        }}
+                        disabled={isPullingStorage || supabaseStatus !== 'connected'}
+                        className="bg-blue-600 text-white p-4 rounded-2xl font-black shadow-md hover:bg-blue-700 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 text-xs sm:text-sm"
+                      >
+                        {isPullingStorage ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>Chargement...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>📥</span>
+                            <span>Charger les données depuis Supabase</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* SECTION DONNÉES & SYNC */}
         <div className="bg-white rounded-[32px] overflow-hidden border border-gray-100 shadow-sm transition-all">
           <button onClick={() => toggleSection('data')} className="w-full p-8 flex items-center justify-between hover:bg-purple-50/30 transition-all text-left">
@@ -2174,6 +2540,58 @@ export const Settings: React.FC<{
                 className="flex-1 p-3 bg-red-600 text-white rounded-xl font-bold text-xs hover:bg-red-700 transition-all shadow-md cursor-pointer"
               >
                 Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL SCRIPT SQL SUPABASE */}
+      {showSqlModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[180] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-[32px] w-full max-w-2xl overflow-hidden shadow-2xl border border-purple-100 flex flex-col max-h-[90vh] animate-scaleUp">
+            <div className="bg-gradient-to-r from-purple-700 to-indigo-700 p-6 text-white flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📋</span>
+                <h3 className="text-xl font-black tracking-tight">Script SQL Supabase (<code className="text-sm font-mono bg-purple-900/50 px-2 py-0.5 rounded">culinashare_data</code>)</h3>
+              </div>
+              <button 
+                onClick={() => setShowSqlModal(false)}
+                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              <p className="text-xs text-gray-600 font-medium leading-relaxed">
+                Copiez ce script SQL et collez-le dans le <strong>SQL Editor</strong> de votre projet Supabase pour créer la table avec les bonnes permissions :
+              </p>
+              
+              <div className="relative">
+                <pre className="p-4 bg-gray-900 text-gray-100 rounded-2xl font-mono text-xs overflow-x-auto leading-relaxed border border-gray-800 select-all">
+                  {CULINASHARE_SQL_SCHEMA}
+                </pre>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(CULINASHARE_SQL_SCHEMA);
+                    setCopiedSql(true);
+                    setTimeout(() => setCopiedSql(false), 2000);
+                  }}
+                  className="absolute top-3 right-3 px-3 py-1.5 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <span>{copiedSql ? '✅' : '📋'}</span>
+                  <span>{copiedSql ? 'Copié !' : 'Copier le SQL'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => setShowSqlModal(false)}
+                className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Fermer
               </button>
             </div>
           </div>

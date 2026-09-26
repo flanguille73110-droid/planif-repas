@@ -26,6 +26,8 @@ import { Planning } from './src/components/Planning';
 import { ShoppingView } from './src/components/ShoppingView';
 import { Settings } from './src/components/Settings';
 import { Notice } from './src/components/Notice';
+import { SupabaseStatus, StorageMode, testSupabaseConnection, saveAppDataToSupabase, loadAppDataFromSupabase } from './src/utils/supabaseClient';
+
 
 // --- Main App ---
 
@@ -271,6 +273,123 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
   };
 
   const [showQuickBackupModal, setShowQuickBackupModal] = useState(false);
+  const [targetSettingsSection, setTargetSettingsSection] = useState<string | null>(null);
+
+  const storageMode: StorageMode = settings.storageType || 'localstorage';
+  const [supabaseStatus, setSupabaseStatus] = useState<SupabaseStatus>(() => {
+    return (settings.storageType === 'supabase' && settings.supabaseUrl && settings.supabaseAnonKey) ? 'connecting' : 'local';
+  });
+
+  // Vérification de la connexion Supabase lors du montage ou du changement de configuration
+  useEffect(() => {
+    if (settings.storageType === 'supabase') {
+      if (!settings.supabaseUrl || !settings.supabaseAnonKey) {
+        setSupabaseStatus('disconnected');
+        return;
+      }
+      setSupabaseStatus('connecting');
+      testSupabaseConnection(settings.supabaseUrl, settings.supabaseAnonKey).then(res => {
+        if (res.success && res.tableReady !== false) {
+          setSupabaseStatus('connected');
+        } else {
+          setSupabaseStatus('disconnected');
+        }
+      }).catch(() => {
+        setSupabaseStatus('disconnected');
+      });
+    } else {
+      setSupabaseStatus('local');
+    }
+  }, [settings.storageType, settings.supabaseUrl, settings.supabaseAnonKey]);
+
+  // Synchronisation automatique vers Supabase (avec temporisation anti-rebond) en mode Supabase
+  useEffect(() => {
+    if (settings.storageType !== 'supabase' || !settings.supabaseUrl || !settings.supabaseAnonKey) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      saveAppDataToSupabase(settings.supabaseUrl!, settings.supabaseAnonKey!, {
+        recipes,
+        mealPlan,
+        settings,
+        shoppingList,
+        pantryGroups,
+        reserveItems,
+        sentMeals: Array.from(sentMeals),
+        dietItems,
+        dietServings,
+        dietRecipes
+      }).then(res => {
+        if (res.success) {
+          setSupabaseStatus('connected');
+        } else {
+          setSupabaseStatus('disconnected');
+        }
+      }).catch(() => {
+        setSupabaseStatus('disconnected');
+      });
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [recipes, mealPlan, settings, shoppingList, pantryGroups, reserveItems, sentMeals, dietItems, dietServings, dietRecipes]);
+
+  // Synchronisation manuelle complète vers Supabase
+  const handleSyncAllDataToSupabase = async () => {
+    if (!settings.supabaseUrl || !settings.supabaseAnonKey) {
+      return { success: false, message: "URL ou clé publique Supabase non configurée." };
+    }
+    const res = await saveAppDataToSupabase(settings.supabaseUrl, settings.supabaseAnonKey, {
+      recipes,
+      mealPlan,
+      settings,
+      shoppingList,
+      pantryGroups,
+      reserveItems,
+      sentMeals: Array.from(sentMeals),
+      dietItems,
+      dietServings,
+      dietRecipes
+    });
+    if (res.success) {
+      setSupabaseStatus('connected');
+      return { success: true, message: "Toutes les données ont été sauvegardées dans Supabase (table culinashare_data) avec succès !" };
+    } else {
+      setSupabaseStatus('disconnected');
+      return { success: false, message: `Erreur lors de la sauvegarde : ${res.error}` };
+    }
+  };
+
+  // Chargement manuel complet depuis Supabase
+  const handleLoadAllDataFromSupabase = async () => {
+    if (!settings.supabaseUrl || !settings.supabaseAnonKey) {
+      return { success: false, message: "URL ou clé publique Supabase non configurée." };
+    }
+    const res = await loadAppDataFromSupabase(settings.supabaseUrl, settings.supabaseAnonKey);
+    if (res.success && res.data) {
+      const d = res.data;
+      if (d.recipes && Array.isArray(d.recipes)) setRecipes(d.recipes);
+      if (d.mealPlan && typeof d.mealPlan === 'object') setMealPlan(d.mealPlan);
+      if (d.settings && typeof d.settings === 'object') setSettings(prev => ({ ...prev, ...d.settings }));
+      if (d.shoppingList && Array.isArray(d.shoppingList)) setShoppingList(d.shoppingList);
+      if (d.pantryGroups && Array.isArray(d.pantryGroups)) setPantryGroups(d.pantryGroups);
+      if (d.reserveItems && Array.isArray(d.reserveItems)) setReserveItems(d.reserveItems);
+      if (d.sentMeals && Array.isArray(d.sentMeals)) setSentMeals(new Set(d.sentMeals));
+      if (d.dietItems && Array.isArray(d.dietItems)) setDietItems(d.dietItems);
+      if (d.dietServings !== undefined) setDietServings(d.dietServings);
+      if (d.dietRecipes && Array.isArray(d.dietRecipes)) setDietRecipes(d.dietRecipes);
+      setSupabaseStatus('connected');
+      return { success: true, message: "Données chargées depuis Supabase avec succès !" };
+    } else {
+      setSupabaseStatus('disconnected');
+      return { success: false, message: `Erreur lors du chargement : ${res.error}` };
+    }
+  };
+
+  const handleOpenStorageSettings = () => {
+    setTargetSettingsSection('storage');
+    setActiveTab('settings');
+  };
 
   useEffect(() => {
     localStorage.setItem('culina_recipes', JSON.stringify(recipes));
@@ -284,6 +403,7 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
     localStorage.setItem('culina_diet_servings', dietServings.toString());
     localStorage.setItem('culina_diet_recipes_v1', JSON.stringify(dietRecipes));
   }, [recipes, mealPlan, settings, shoppingList, pantryGroups, reserveItems, sentMeals, dietItems, dietServings, dietRecipes]);
+
 
   const addRecipe = (r: Recipe) => setRecipes(prev => {
     const index = prev.findIndex(item => item.id === r.id);
@@ -1566,7 +1686,14 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row pb-20 md:pb-0">
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} onQuickBackup={handleQuickBackup} />
+      <Navbar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        onQuickBackup={handleQuickBackup} 
+        storageMode={storageMode}
+        supabaseStatus={supabaseStatus}
+        onOpenStorageSettings={handleOpenStorageSettings}
+      />
       <main className="flex-1 overflow-y-auto p-4 md:p-8 max-w-6xl mx-auto w-full">
         {activeTab === 'recipes' && (
           <RecipeBook 
@@ -1721,6 +1848,14 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
             pantryGroups={pantryGroups}
             reserveItems={reserveItems}
             baseDate={baseDate}
+            storageMode={storageMode}
+            setStorageMode={(mode) => setSettings(prev => ({ ...prev, storageType: mode }))}
+            supabaseStatus={supabaseStatus}
+            setSupabaseStatus={setSupabaseStatus}
+            onSyncAllDataToSupabase={handleSyncAllDataToSupabase}
+            onLoadAllDataFromSupabase={handleLoadAllDataFromSupabase}
+            activeSectionProp={targetSettingsSection}
+            setActiveSectionProp={setTargetSettingsSection}
           />
         )}
         {activeTab === 'notice' && (

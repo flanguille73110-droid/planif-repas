@@ -57,4 +57,7 @@ export interface UserSettings {
   foodCategories?: string[];
   servingsDefault: number;
   language: string;
+  storageType?: 'localstorage' | 'supabase';
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
 }
