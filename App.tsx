@@ -26,7 +26,7 @@ import { Planning } from './src/components/Planning';
 import { ShoppingView } from './src/components/ShoppingView';
 import { Settings } from './src/components/Settings';
 import { Notice } from './src/components/Notice';
-import { SupabaseStatus, StorageMode, testSupabaseConnection, saveAppDataToSupabase, loadAppDataFromSupabase } from './src/utils/supabaseClient';
+import { SupabaseStatus, StorageMode, testSupabaseConnection, saveAppDataToSupabase, loadAppDataFromSupabase, subscribeToAppDataChanges } from './src/utils/supabaseClient';
 
 
 // --- Main App ---
@@ -281,6 +281,7 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
   });
 
   const isInitialLoadDoneRef = useRef<boolean>(false);
+  const isRemoteUpdatingRef = useRef<boolean>(false);
 
   // Vérification de la connexion Supabase et chargement initial des données distantes
   useEffect(() => {
@@ -297,6 +298,7 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
           if (!isInitialLoadDoneRef.current) {
             const loadRes = await loadAppDataFromSupabase(settings.supabaseUrl!, settings.supabaseAnonKey!);
             if (loadRes.success && loadRes.data && Object.keys(loadRes.data).length > 0) {
+              isRemoteUpdatingRef.current = true;
               const d = loadRes.data;
               if (d.recipes && Array.isArray(d.recipes)) setRecipes(d.recipes);
               if (d.mealPlan && typeof d.mealPlan === 'object') setMealPlan(d.mealPlan);
@@ -308,6 +310,9 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
               if (d.dietItems && Array.isArray(d.dietItems)) setDietItems(d.dietItems);
               if (d.dietServings !== undefined) setDietServings(d.dietServings);
               if (d.dietRecipes && Array.isArray(d.dietRecipes)) setDietRecipes(d.dietRecipes);
+              setTimeout(() => {
+                isRemoteUpdatingRef.current = false;
+              }, 500);
             }
             isInitialLoadDoneRef.current = true;
           }
@@ -322,6 +327,45 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
     }
   }, [settings.storageType, settings.supabaseUrl, settings.supabaseAnonKey]);
 
+  // Abonnement aux modifications en temps réel (Realtime) sur Supabase
+  useEffect(() => {
+    if (settings.storageType !== 'supabase' || !settings.supabaseUrl || !settings.supabaseAnonKey) {
+      return;
+    }
+
+    const unsubscribe = subscribeToAppDataChanges(settings.supabaseUrl, settings.supabaseAnonKey, (key, value) => {
+      isRemoteUpdatingRef.current = true;
+      if (key === 'recipes' && Array.isArray(value)) {
+        setRecipes(value);
+      } else if (key === 'mealPlan' && typeof value === 'object' && value !== null) {
+        setMealPlan(value);
+      } else if (key === 'settings' && typeof value === 'object' && value !== null) {
+        setSettings(prev => ({ ...prev, ...value }));
+      } else if (key === 'shoppingList' && Array.isArray(value)) {
+        setShoppingList(value);
+      } else if (key === 'pantryGroups' && Array.isArray(value)) {
+        setPantryGroups(value);
+      } else if (key === 'reserveItems' && Array.isArray(value)) {
+        setReserveItems(value);
+      } else if (key === 'sentMeals' && Array.isArray(value)) {
+        setSentMeals(new Set(value));
+      } else if (key === 'dietItems' && Array.isArray(value)) {
+        setDietItems(value);
+      } else if (key === 'dietServings' && value !== undefined) {
+        setDietServings(typeof value === 'number' ? value : parseFloat(value) || 2.5);
+      } else if (key === 'dietRecipes' && Array.isArray(value)) {
+        setDietRecipes(value);
+      }
+      setTimeout(() => {
+        isRemoteUpdatingRef.current = false;
+      }, 500);
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [settings.storageType, settings.supabaseUrl, settings.supabaseAnonKey]);
+
   // Synchronisation automatique vers Supabase (avec temporisation anti-rebond) en mode Supabase
   useEffect(() => {
     if (settings.storageType !== 'supabase' || !settings.supabaseUrl || !settings.supabaseAnonKey) {
@@ -330,6 +374,11 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
 
     // Ne pas écraser les données distantes tant que le premier chargement n'est pas terminé
     if (!isInitialLoadDoneRef.current) {
+      return;
+    }
+
+    // Si la modification vient d'une mise à jour distante temps réel, ignorer pour éviter une boucle de réécriture
+    if (isRemoteUpdatingRef.current) {
       return;
     }
 

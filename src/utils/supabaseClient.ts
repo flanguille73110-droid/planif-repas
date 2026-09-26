@@ -36,7 +36,21 @@ ON culinashare_data
 FOR ALL 
 TO anon, authenticated
 USING (true) 
-WITH CHECK (true);`;
+WITH CHECK (true);
+
+-- Activation de la synchronisation en temps réel (Realtime) :
+ALTER TABLE culinashare_data REPLICA IDENTITY FULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+    AND schemaname = 'public' 
+    AND tablename = 'culinashare_data'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE culinashare_data;
+  END IF;
+END $$;`;
 
 let cachedClient: { url: string; key: string; client: SupabaseClient } | null = null;
 
@@ -186,5 +200,52 @@ export async function loadAppDataFromSupabase(url: string, key: string): Promise
     return { success: true, data: result };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Erreur de chargement' };
+  }
+}
+
+export type RealtimeChangeCallback = (key: string, value: any) => void;
+
+/**
+ * S'abonne aux changements en temps réel sur la table Supabase
+ */
+export function subscribeToAppDataChanges(
+  url: string,
+  key: string,
+  onChange: RealtimeChangeCallback
+): (() => void) | null {
+  const client = getSupabaseClient(url, key);
+  if (!client) return null;
+
+  try {
+    const channelName = `culinashare_sync_${Math.random().toString(36).substring(2, 8)}`;
+    const channel = client
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: CULINASHARE_TABLE_NAME
+        },
+        (payload: any) => {
+          if (payload && payload.new && payload.new.key) {
+            onChange(payload.new.key, payload.new.value);
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Supabase Realtime] Connecté aux mises à jour en direct');
+        }
+      });
+
+    return () => {
+      try {
+        client.removeChannel(channel);
+      } catch (e) {}
+    };
+  } catch (err) {
+    console.error('Erreur abonnement Realtime Supabase:', err);
+    return null;
   }
 }
