@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Recipe, MealPlanDay, ShoppingListItem, AppTab, UserSettings, Ingredient, FoodPortion, PortionRule, DietItem, DietCategory, DietRecipe, DietRecipeItem, PantryGroup } from './src/types';
 import { CATEGORIES, DIETARY_OPTIONS, FOOD_CATEGORIES } from './constants';
 import { SearchableSelect } from './src/components/SearchableSelect';
@@ -280,7 +280,9 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
     return (settings.storageType === 'supabase' && settings.supabaseUrl && settings.supabaseAnonKey) ? 'connecting' : 'local';
   });
 
-  // Vérification de la connexion Supabase lors du montage ou du changement de configuration
+  const isInitialLoadDoneRef = useRef<boolean>(false);
+
+  // Vérification de la connexion Supabase et chargement initial des données distantes
   useEffect(() => {
     if (settings.storageType === 'supabase') {
       if (!settings.supabaseUrl || !settings.supabaseAnonKey) {
@@ -288,9 +290,27 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
         return;
       }
       setSupabaseStatus('connecting');
-      testSupabaseConnection(settings.supabaseUrl, settings.supabaseAnonKey).then(res => {
+      testSupabaseConnection(settings.supabaseUrl, settings.supabaseAnonKey).then(async res => {
         if (res.success && res.tableReady !== false) {
           setSupabaseStatus('connected');
+          // Charger automatiquement les données de Supabase au premier démarrage
+          if (!isInitialLoadDoneRef.current) {
+            const loadRes = await loadAppDataFromSupabase(settings.supabaseUrl!, settings.supabaseAnonKey!);
+            if (loadRes.success && loadRes.data && Object.keys(loadRes.data).length > 0) {
+              const d = loadRes.data;
+              if (d.recipes && Array.isArray(d.recipes)) setRecipes(d.recipes);
+              if (d.mealPlan && typeof d.mealPlan === 'object') setMealPlan(d.mealPlan);
+              if (d.settings && typeof d.settings === 'object') setSettings(prev => ({ ...prev, ...d.settings }));
+              if (d.shoppingList && Array.isArray(d.shoppingList)) setShoppingList(d.shoppingList);
+              if (d.pantryGroups && Array.isArray(d.pantryGroups)) setPantryGroups(d.pantryGroups);
+              if (d.reserveItems && Array.isArray(d.reserveItems)) setReserveItems(d.reserveItems);
+              if (d.sentMeals && Array.isArray(d.sentMeals)) setSentMeals(new Set(d.sentMeals));
+              if (d.dietItems && Array.isArray(d.dietItems)) setDietItems(d.dietItems);
+              if (d.dietServings !== undefined) setDietServings(d.dietServings);
+              if (d.dietRecipes && Array.isArray(d.dietRecipes)) setDietRecipes(d.dietRecipes);
+            }
+            isInitialLoadDoneRef.current = true;
+          }
         } else {
           setSupabaseStatus('disconnected');
         }
@@ -305,6 +325,11 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
   // Synchronisation automatique vers Supabase (avec temporisation anti-rebond) en mode Supabase
   useEffect(() => {
     if (settings.storageType !== 'supabase' || !settings.supabaseUrl || !settings.supabaseAnonKey) {
+      return;
+    }
+
+    // Ne pas écraser les données distantes tant que le premier chargement n'est pas terminé
+    if (!isInitialLoadDoneRef.current) {
       return;
     }
 
@@ -378,6 +403,7 @@ const [activeTab, setActiveTab] = useState<AppTab>('recipes');
       if (d.dietItems && Array.isArray(d.dietItems)) setDietItems(d.dietItems);
       if (d.dietServings !== undefined) setDietServings(d.dietServings);
       if (d.dietRecipes && Array.isArray(d.dietRecipes)) setDietRecipes(d.dietRecipes);
+      isInitialLoadDoneRef.current = true;
       setSupabaseStatus('connected');
       return { success: true, message: "Données chargées depuis Supabase avec succès !" };
     } else {

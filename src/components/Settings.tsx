@@ -87,11 +87,11 @@ export const Settings: React.FC<{
   }, [activeSectionProp]);
 
   const toggleSection = (sec: string) => {
-    setActiveSection(prev => {
-      const next = prev === sec ? null : sec;
-      if (setActiveSectionProp) setActiveSectionProp(next);
-      return next;
-    });
+    const next = activeSection === sec ? null : sec;
+    setActiveSection(next);
+    if (setActiveSectionProp) {
+      setActiveSectionProp(next);
+    }
   };
 
   // États pour la section Stockage
@@ -105,6 +105,20 @@ export const Settings: React.FC<{
   const [isPullingStorage, setIsPullingStorage] = useState<boolean>(false);
   const [showSqlModal, setShowSqlModal] = useState<boolean>(false);
   const [copiedSql, setCopiedSql] = useState<boolean>(false);
+  const [showConfirmPushSupabaseModal, setShowConfirmPushSupabaseModal] = useState<boolean>(false);
+
+  const handleConfirmPushToSupabase = async () => {
+    setShowConfirmPushSupabaseModal(false);
+    if (onSyncAllDataToSupabase) {
+      setIsSyncingStorage(true);
+      try {
+        const res = await onSyncAllDataToSupabase();
+        alert(res.message);
+      } finally {
+        setIsSyncingStorage(false);
+      }
+    }
+  };
 
   useEffect(() => {
     setSupabaseUrlInput(settings.supabaseUrl || '');
@@ -1638,17 +1652,7 @@ export const Settings: React.FC<{
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <button
                         type="button"
-                        onClick={async () => {
-                          if (onSyncAllDataToSupabase) {
-                            setIsSyncingStorage(true);
-                            try {
-                              const res = await onSyncAllDataToSupabase();
-                              alert(res.message);
-                            } finally {
-                              setIsSyncingStorage(false);
-                            }
-                          }
-                        }}
+                        onClick={() => setShowConfirmPushSupabaseModal(true)}
                         disabled={isSyncingStorage || supabaseStatus !== 'connected'}
                         className="bg-emerald-600 text-white p-4 rounded-2xl font-black shadow-md hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 text-xs sm:text-sm"
                       >
@@ -2592,6 +2596,42 @@ export const Settings: React.FC<{
                 className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
               >
                 Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMATION ENVOI DES DONNÉES VERS SUPABASE */}
+      {showConfirmPushSupabaseModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[190] flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl p-6 text-center space-y-5 animate-scaleUp border border-amber-100">
+            <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-inner">
+              ⚠️
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-black text-gray-900">Confirmation d'envoi</h3>
+              <p className="text-sm font-bold text-gray-800 leading-relaxed">
+                Attention, vous allez charger cette version de l'application vers les autres supports.
+              </p>
+              <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                Toutes les données actuelles de cet appareil (recettes, planning, stocks, courses) remplaceront la version enregistrée sur Supabase pour tous vos appareils connectés.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button 
+                type="button"
+                onClick={() => setShowConfirmPushSupabaseModal(false)}
+                className="flex-1 p-3.5 bg-gray-100 text-gray-700 rounded-xl font-black text-xs hover:bg-gray-200 transition-all cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button 
+                type="button"
+                onClick={handleConfirmPushToSupabase}
+                className="flex-1 p-3.5 bg-emerald-600 text-white rounded-xl font-black text-xs hover:bg-emerald-700 transition-all shadow-md shadow-emerald-200 cursor-pointer"
+              >
+                Confirmer
               </button>
             </div>
           </div>
